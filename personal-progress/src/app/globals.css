@@ -1,0 +1,60 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.978 0.006 145);
+  --foreground: oklch(0.225 0.024 150);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.225 0.024 150);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.225 0.024 150);
+  --primary: oklch(0.43 0.075 151);
+  --primary-foreground: oklch(0.99 0.003 145);
+  --secondary: oklch(0.93 0.026 149);
+  --secondary-foreground: oklch(0.29 0.04 150);
+  --muted: oklch(0.955 0.009 145);
+  --muted-foreground: oklch(0.49 0.022 150);
+  --accent: oklch(0.93 0.032 80);
+  --accent-foreground: oklch(0.32 0.045 75);
+  --destructive: oklch(0.57 0.13 28);
+  --border: oklch(0.88 0.016 145);
+  --input: oklch(0.88 0.016 145);
+  --ring: oklch(0.47 0.075 151);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* { box-sizing: border-box; }
+html { background: var(--background); }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--font-geist-sans), "Microsoft YaHei", "PingFang SC", Arial, sans-serif; }
+button, input, select, textarea { font: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), a { transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
+button:not(:disabled):active, a:active { transform: translateY(1px); }
+::selection { background: oklch(0.86 0.05 145); color: var(--foreground); }
