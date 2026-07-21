@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto";
 import * as Lark from "@larksuiteoapi/node-sdk";
 import { createClient } from "@supabase/supabase-js";
 
-const required = ["FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_INGEST_SECRET", "DAILY_SPACE_INGEST_URL"];
+const required = ["FEISHU_APP_ID", "FEISHU_APP_SECRET", "DAILY_SPACE_INGEST_URL"];
 const missing = required.filter((name) => !process.env[name]);
 if (missing.length > 0) {
   throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
@@ -11,7 +11,10 @@ if (missing.length > 0) {
 
 const appId = process.env.FEISHU_APP_ID;
 const appSecret = process.env.FEISHU_APP_SECRET;
-const ingestSecret = process.env.FEISHU_INGEST_SECRET;
+// The website accepts a dedicated ingestion secret when one is configured.
+// Existing deployments use the App Secret during the transition, so retain a
+// compatible fallback until both services have the dedicated secret.
+const ingestSecret = process.env.FEISHU_INGEST_SECRET || appSecret;
 const ingestUrl = process.env.DAILY_SPACE_INGEST_URL;
 const port = Number(process.env.PORT || 3000);
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
