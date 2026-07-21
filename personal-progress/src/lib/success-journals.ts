@@ -26,3 +26,9 @@ export function saveSuccessJournal(entry: Omit<SuccessJournal, "updatedAt">) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   window.dispatchEvent(new Event("daily-space:success-journals-changed"));
 }
+
+export function deleteSuccessJournal(date: string) {
+  const next = listSuccessJournals().filter((entry) => entry.date !== date);
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  window.dispatchEvent(new Event("daily-space:success-journals-changed"));
+}

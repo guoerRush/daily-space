@@ -51,6 +51,9 @@ function writeArray(records: StoredRecord, key: string, value: unknown[]) {
   records[key] = JSON.stringify(value);
 }
 
+const bindingCodeKey = "daily-space:feishu-binding-code";
+const bindingOpenIdKey = "daily-space:feishu-open-id";
+
 function beijingDate() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
@@ -62,7 +65,23 @@ function beijingDate() {
 
 function parseCommand(text: string): { target: CommandTarget; content: string } {
   const matched = text.trim().match(/^\/?(AI|\u5de5\u4f5c|\u751f\u6d3b|\u65e5\u8bb0|\u5b89\u6392|\u6210\u529f\u65e5\u8bb0|\u6210\u529f|\u957f\u671f\u76ee\u6807|\u77ed\u671f\u76ee\u6807|\u76ee\u6807|\u4e60\u60ef|\u6253\u5361|\u7eaa\u5ff5\u65e5|\u63d0\u9192|\u5e2e\u52a9)\s*([\s\S]*)$/i);
-  if (!matched) return { target: "ai", content: text.trim() };
+  if (!matched) {
+    const content = text.trim();
+    const naturalTargets: Array<{ target: CommandTarget; expression: RegExp }> = [
+      { target: "work", expression: /\u5de5\u4f5c(?:\u6a21\u5757|\u968f\u8bb0)?/ },
+      { target: "life", expression: /\u751f\u6d3b(?:\u6a21\u5757|\u968f\u8bb0)?/ },
+      { target: "journal", expression: /(?:\u65e5\u8bb0|\u590d\u76d8\u624b\u8bb0)/ },
+      { target: "plan", expression: /(?:\u4eca\u65e5\u5b89\u6392|\u5f53\u65e5\u8ba1\u5212|\u5f85\u529e)/ },
+      { target: "success", expression: /\u6210\u529f\u65e5\u8bb0/ },
+      { target: "long-goal", expression: /\u957f\u671f\u76ee\u6807/ },
+      { target: "short-goal", expression: /\u77ed\u671f\u76ee\u6807/ },
+      { target: "habit", expression: /\u4e60\u60ef/ },
+    ];
+    const detected = naturalTargets.find((rule) => rule.expression.test(content));
+    if (!detected) return { target: "ai", content };
+    const cleaned = content.replace(/^.*?(?:\u6dfb\u52a0|\u8bb0\u5f55|\u5199\u4e0b|\u4fdd\u5b58|\u653e\u5230|\u8f93\u5165)[\uff1a:,\uff0c\s]*/u, "").trim();
+    return { target: detected.target, content: cleaned || content };
+  }
   const label = matched[1].toUpperCase();
   const content = matched[2].trim();
   if (label === "AI") return { target: "ai", content };
@@ -252,12 +271,27 @@ async function writeIncomingMessage(userId: string, message: FeishuMessage) {
 async function bindOpenId(openId: string, code: string) {
   const serviceSupabase = await getServiceSupabase();
   if (!serviceSupabase) throw new Error("missing_supabase_service_key");
-  const { data, error } = await serviceSupabase.from("feishu_binding_codes").select("user_id, expires_at").eq("code", code).maybeSingle();
-  if (error || !data || Date.parse(data.expires_at) < Date.now()) return false;
-  const { error: bindingError } = await serviceSupabase.from("feishu_bindings").upsert({ open_id: openId, user_id: data.user_id });
-  if (bindingError) throw bindingError;
-  await serviceSupabase.from("feishu_binding_codes").delete().eq("code", code);
+  const { data, error } = await serviceSupabase.from("user_records").select("user_id, records");
+  if (error || !data) throw new Error("binding_record_lookup_failed");
+  const matched = data.find((row) => {
+    const binding = parseJson((row.records as StoredRecord | null)?.[bindingCodeKey]);
+    return binding.code === code && typeof binding.expiresAt === "string" && Date.parse(binding.expiresAt) >= Date.now();
+  });
+  if (!matched) return false;
+  const records = matched.records && typeof matched.records === "object" ? matched.records as StoredRecord : {};
+  records[bindingOpenIdKey] = openId;
+  delete records[bindingCodeKey];
+  const { error: saveError } = await serviceSupabase.from("user_records").upsert({ user_id: matched.user_id, records, updated_at: new Date().toISOString() });
+  if (saveError) throw saveError;
   return true;
+}
+
+async function findBoundUserId(openId: string) {
+  const serviceSupabase = await getServiceSupabase();
+  if (!serviceSupabase) throw new Error("missing_supabase_service_key");
+  const { data, error } = await serviceSupabase.from("user_records").select("user_id, records");
+  if (error || !data) throw new Error("binding_record_lookup_failed");
+  return data.find((row) => (row.records as StoredRecord | null)?.[bindingOpenIdKey] === openId)?.user_id;
 }
 
 type CallbackPayload = { type?: string; token?: string; challenge?: string; header?: { token?: string; event_type?: string }; event?: FeishuEvent };
@@ -289,20 +323,13 @@ async function processCallback(payload: CallbackPayload) {
     return NextResponse.json({ ok: true, help: true });
   }
 
-  const serviceSupabase = await getServiceSupabase();
-  if (!serviceSupabase) throw new Error("missing_supabase_service_key");
-  const { data: binding } = await serviceSupabase.from("feishu_bindings").select("user_id").eq("open_id", openId).maybeSingle();
-  if (!binding) return;
-
-  const { error: seenError } = await serviceSupabase.from("feishu_processed_messages").insert({ message_id: message.message_id });
-  if (seenError?.code === "23505") return;
-  if (seenError) throw new Error("unable_to_reserve_message");
+  const userId = await findBoundUserId(openId);
+  if (!userId) return;
 
   try {
-    await writeIncomingMessage(binding.user_id, message);
+    await writeIncomingMessage(userId, message);
     await replyToMessage(message.message_id, "\u5df2\u4fdd\u5b58\u5230\u65e5\u5e38\u7559\u767d\u3002");
   } catch (error) {
-    await serviceSupabase.from("feishu_processed_messages").delete().eq("message_id", message.message_id);
     console.error("Failed to import Feishu message", error);
     throw error;
   }
@@ -310,7 +337,9 @@ async function processCallback(payload: CallbackPayload) {
 
 export async function POST(request: NextRequest) {
   const receivedPayload = (await request.json().catch(() => null)) as CallbackPayload | FeishuEvent | null;
-  const ingestSecret = process.env.FEISHU_INGEST_SECRET;
+  // The worker and website share the application secret by default. A
+  // dedicated FEISHU_INGEST_SECRET can be added later to rotate it separately.
+  const ingestSecret = process.env.FEISHU_INGEST_SECRET || process.env.FEISHU_APP_SECRET;
   const isTrustedLongConnection = Boolean(
     ingestSecret && request.headers.get("x-feishu-ingest-secret") === ingestSecret,
   );

@@ -49,6 +49,16 @@ export function saveJournal(entry: Omit<JournalEntry, "updatedAt">) {
   window.dispatchEvent(new Event("daily-space:journals-changed"));
 }
 
+export function deleteJournal(date: string) {
+  const next = listJournals().filter((entry) => entry.date !== date);
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  // Remove records written by older versions of the app as well.
+  window.localStorage.removeItem(`journal:${date}`);
+  window.localStorage.removeItem(`mood:${date}`);
+  cachedRaw = null;
+  window.dispatchEvent(new Event("daily-space:journals-changed"));
+}
+
 export function formatJournalDate(date: string) {
   return new Date(`${date}T12:00:00`).toLocaleDateString("zh-CN", {
     year: "numeric",

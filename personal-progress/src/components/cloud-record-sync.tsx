@@ -59,10 +59,14 @@ export function CloudRecordSync() {
     let timer: number | undefined;
     let active = true;
 
-    const sync = async () => {
+    const sync = async (preferLocal = false) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!active || !session) return;
       const local = collectRecords();
+      if (preferLocal) {
+        await supabase.from("user_records").upsert({ user_id: session.user.id, records: local, updated_at: new Date().toISOString() });
+        return;
+      }
       const { data } = await supabase.from("user_records").select("records").eq("user_id", session.user.id).maybeSingle();
       const remote = data?.records && typeof data.records === "object" ? data.records as StoredRecord : {};
       const records = mergeRecords(remote, local);
@@ -78,14 +82,16 @@ export function CloudRecordSync() {
       const { data } = await supabase.from("user_records").select("records").eq("user_id", session.user.id).maybeSingle();
       const records = data?.records as StoredRecord | undefined;
       if (records && Object.keys(records).length) { Object.entries(records).forEach(([key, value]) => window.localStorage.setItem(key, value)); notifyPages(); }
-      else await sync();
+      else await sync(true);
     };
 
     void start();
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { if (session) void start(); });
-    const schedule = () => { if (timer) window.clearTimeout(timer); timer = window.setTimeout(() => { void sync(); }, 2000); };
+    // A local change, including deletion, is authoritative. Merging with an
+    // older remote list would otherwise bring deleted records back on refresh.
+    const schedule = () => { if (timer) window.clearTimeout(timer); timer = window.setTimeout(() => { void sync(true); }, 500); };
     const remoteRefresh = window.setInterval(() => { void sync(); }, 15_000);
-    const events = ["daily-space:journals-changed", "daily-space:notes-changed", "daily-space:plans-changed", "daily-space:success-journals-changed", "daily-space:reminder-changed", "daily-space:habits-changed", "daily-space:days-changed"];
+    const events = ["daily-space:journals-changed", "daily-space:notes-changed", "daily-space:plans-changed", "daily-space:success-journals-changed", "daily-space:reminder-changed", "daily-space:feishu-reminders-changed", "daily-space:habits-changed", "daily-space:goals-changed", "daily-space:days-changed"];
     events.forEach((name) => window.addEventListener(name, schedule));
     return () => { active = false; subscription.unsubscribe(); window.clearInterval(remoteRefresh); if (timer) window.clearTimeout(timer); events.forEach((name) => window.removeEventListener(name, schedule)); };
   }, []);

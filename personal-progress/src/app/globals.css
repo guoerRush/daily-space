@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 
 :root {
-  --radius: 0.75rem;
+  --radius: 0.85rem;
   --background: oklch(0.978 0.006 145);
   --foreground: oklch(0.225 0.024 150);
   --card: oklch(1 0 0);
@@ -53,8 +53,13 @@
 html { background: var(--background); }
 body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--font-geist-sans), "Microsoft YaHei", "PingFang SC", Arial, sans-serif; }
 button, input, select, textarea { font: inherit; }
+button:not([data-slot="button"]):not([class*="rounded-full"]), input:not([data-slot="input"]), select, textarea:not([data-slot="textarea"]) { border-radius: calc(var(--radius) + 1px); }
+button:not([data-slot="button"]):not([class*="rounded-full"])[class*="border"], button:not([data-slot="button"]):not([class*="rounded-full"])[class*="bg-"] { box-shadow: 0 3px 10px rgb(31 67 45 / 0.07); }
+button:not([data-slot="button"]):not([class*="rounded-full"])[class*="border"]:hover, button:not([data-slot="button"]):not([class*="rounded-full"])[class*="bg-"]:hover { box-shadow: 0 8px 18px rgb(31 67 45 / 0.11); }
+input:not([data-slot="input"]), select, textarea:not([data-slot="textarea"]) { background-color: rgb(255 255 255 / 0.78); }
+a[class*="border"]:not([class*="rounded-full"]) { border-radius: calc(var(--radius) + 1px); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 button, a { -webkit-tap-highlight-color: transparent; }
-button:not(:disabled), a { transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
+button:not(:disabled), a { transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
 button:not(:disabled):active, a:active { transform: translateY(1px); }
 ::selection { background: oklch(0.86 0.05 145); color: var(--foreground); }

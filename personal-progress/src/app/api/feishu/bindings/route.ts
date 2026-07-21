@@ -7,6 +7,13 @@ function createBindingCode() {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
 }
 
+type StoredRecord = Record<string, string>;
+const bindingCodeKey = "daily-space:feishu-binding-code";
+
+function recordsFrom(value: unknown): StoredRecord {
+  return value && typeof value === "object" ? value as StoredRecord : {};
+}
+
 export async function POST(request: NextRequest) {
   const serviceSupabase = getServiceSupabaseClient();
   const publicSupabase = getPublicSupabaseClient();
@@ -22,13 +29,12 @@ export async function POST(request: NextRequest) {
 
   const userId = userData.user.id;
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  await serviceSupabase.from("feishu_binding_codes").delete().eq("user_id", userId);
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const code = createBindingCode();
-    const { error } = await serviceSupabase.from("feishu_binding_codes").insert({ code, user_id: userId, expires_at: expiresAt });
-    if (!error) return NextResponse.json({ code, expiresAt });
-  }
-
-  return NextResponse.json({ message: "\u6682\u65f6\u65e0\u6cd5\u751f\u6210\u7ed1\u5b9a\u7801\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002" }, { status: 500 });
+  const code = createBindingCode();
+  const { data, error } = await serviceSupabase.from("user_records").select("records").eq("user_id", userId).maybeSingle();
+  if (error) return NextResponse.json({ message: "\u6682\u65f6\u65e0\u6cd5\u8bbf\u95ee\u4e91\u7aef\u8bb0\u5f55\u3002" }, { status: 503 });
+  const records = recordsFrom(data?.records);
+  records[bindingCodeKey] = JSON.stringify({ code, expiresAt });
+  const { error: saveError } = await serviceSupabase.from("user_records").upsert({ user_id: userId, records, updated_at: new Date().toISOString() });
+  if (saveError) return NextResponse.json({ message: "\u6682\u65f6\u65e0\u6cd5\u4fdd\u5b58\u7ed1\u5b9a\u7801\u3002" }, { status: 503 });
+  return NextResponse.json({ code, expiresAt });
 }
