@@ -27,7 +27,12 @@ $savedAppId = [Environment]::GetEnvironmentVariable("DAILY_SPACE_FEISHU_APP_ID",
 $savedAppSecret = [Environment]::GetEnvironmentVariable("DAILY_SPACE_FEISHU_APP_SECRET", "User")
 if ($savedAppId) { $env:FEISHU_APP_ID = $savedAppId }
 if ($savedAppSecret) { $env:FEISHU_APP_SECRET = $savedAppSecret }
-$env:DAILY_SPACE_INGEST_URL = "https://daily-space-six.vercel.app/api/feishu/events"
+$savedIngestUrl = [Environment]::GetEnvironmentVariable("DAILY_SPACE_INGEST_URL", "User")
+$env:DAILY_SPACE_INGEST_URL = if ($savedIngestUrl) {
+  $savedIngestUrl.TrimEnd("/") + "/api/feishu/events"
+} else {
+  "https://daily-space-six.vercel.app/api/feishu/events"
+}
 $env:PORT = "3010"
 $outputLog = Join-Path $projectRoot "feishu-worker.out.log"
 $errorLog = Join-Path $projectRoot "feishu-worker.err.log"
