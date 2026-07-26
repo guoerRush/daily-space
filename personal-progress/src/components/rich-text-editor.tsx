@@ -79,7 +79,7 @@ export function RichTextEditor({ value, onChange, placeholder = "开始记录…
       <ToolbarButton label="右对齐" active={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()}><AlignRight /></ToolbarButton>
       <label className="ml-1 grid size-7 cursor-pointer place-items-center rounded-md border border-border bg-card" title="文字颜色"><input type="color" aria-label="文字颜色" className="size-4 cursor-pointer border-0 bg-transparent p-0" onChange={(event) => editor.chain().focus().setColor(event.target.value).run()} /></label>
       <span className="mx-1 h-5 border-l border-border" />
-      <VoiceDictationButton />
+      <VoiceDictationButton onTranscript={(transcript) => editor.chain().focus().insertContent(transcript).run()} />
       <span className="mx-1 h-5 border-l border-border" />
       <ToolbarButton label="撤销" onClick={() => editor.chain().focus().undo().run()}><Undo2 /></ToolbarButton>
       <ToolbarButton label="重做" onClick={() => editor.chain().focus().redo().run()}><Redo2 /></ToolbarButton>
