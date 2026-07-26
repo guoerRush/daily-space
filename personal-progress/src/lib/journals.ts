@@ -4,10 +4,24 @@ export type JournalEntry = {
   mood: string;
   images?: string[];
   highlights?: string[];
+  template?: "free" | "touch" | "review";
+  touchEvent?: string;
+  touchWhy?: string;
+  touchAction?: string;
+  reviewDesc?: string;
+  reviewAnalysis?: string;
+  reviewAction?: string;
+  linkedDiaryIds?: string[];
+  /** Date routes used by the local journal UI for linked Supabase UUIDs. */
+  linkedDiaryDates?: Record<string, string>;
+  metaCognition?: {
+    isObjective: boolean;
+    isAvoidingCoreIssue: boolean;
+    isConfidentInAction: boolean;
+  };
   updatedAt: string;
 };
 
-const STORAGE_KEY = "daily-space:journals";
 let cachedRaw: string | null = null;
 let cachedEntries: JournalEntry[] = [];
 
@@ -18,7 +32,7 @@ function canUseStorage() {
 export function listJournals(): JournalEntry[] {
   if (!canUseStorage()) return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY) ?? "[]";
+    const raw = window.localStorage.getItem(STORAGE_KEYS.journals) ?? "[]";
     if (raw === cachedRaw) return cachedEntries;
     cachedRaw = raw;
     const indexed = JSON.parse(raw) as JournalEntry[];
@@ -28,9 +42,18 @@ export function listJournals(): JournalEntry[] {
       const date = key.slice("journal:".length);
       const content = window.localStorage.getItem(key) ?? "";
       if (!content || dates.has(date)) return [];
-      return [{ date, content, mood: window.localStorage.getItem(`mood:${date}`) ?? "平静", updatedAt: new Date().toISOString() }];
+      return [
+        {
+          date,
+          content,
+          mood: window.localStorage.getItem(`mood:${date}`) ?? "平静",
+          updatedAt: new Date().toISOString(),
+        },
+      ];
     });
-    cachedEntries = [...indexed, ...legacy].sort((a, b) => b.date.localeCompare(a.date));
+    cachedEntries = [...indexed, ...legacy].sort((a, b) =>
+      b.date.localeCompare(a.date),
+    );
     return cachedEntries;
   } catch {
     return [];
@@ -44,19 +67,19 @@ export function findJournal(date: string) {
 export function saveJournal(entry: Omit<JournalEntry, "updatedAt">) {
   const current = listJournals().filter((item) => item.date !== entry.date);
   const next = [{ ...entry, updatedAt: new Date().toISOString() }, ...current];
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  window.localStorage.setItem(STORAGE_KEYS.journals, JSON.stringify(next));
   cachedRaw = null;
-  window.dispatchEvent(new Event("daily-space:journals-changed"));
+  window.dispatchEvent(new Event(STORAGE_EVENTS.journalsChanged));
 }
 
 export function deleteJournal(date: string) {
   const next = listJournals().filter((entry) => entry.date !== date);
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  window.localStorage.setItem(STORAGE_KEYS.journals, JSON.stringify(next));
   // Remove records written by older versions of the app as well.
   window.localStorage.removeItem(`journal:${date}`);
   window.localStorage.removeItem(`mood:${date}`);
   cachedRaw = null;
-  window.dispatchEvent(new Event("daily-space:journals-changed"));
+  window.dispatchEvent(new Event(STORAGE_EVENTS.journalsChanged));
 }
 
 export function formatJournalDate(date: string) {
@@ -70,5 +93,10 @@ export function formatJournalDate(date: string) {
 
 export function todayKey() {
   const now = new Date();
-  return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
 }
+import { STORAGE_EVENTS, STORAGE_KEYS } from "@/lib/storage-contract";
