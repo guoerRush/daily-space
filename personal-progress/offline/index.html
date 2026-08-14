@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f6f8f2">
+  <title>日常留白 | 离线记录</title>
+  <style>
+    :root {
+      --bg: #f6f8f2;
+      --surface: #fffefb;
+      --surface-soft: #edf3e8;
+      --ink: #24342a;
+      --muted: #68756d;
+      --line: #d9e1d7;
+      --primary: #416b50;
+      --primary-strong: #315640;
+      --primary-text: #ffffff;
+      --danger: #a44949;
+      --shadow: 0 10px 28px rgba(41, 67, 49, .07);
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--bg); }
+    body {
+      min-width: 300px;
+      min-height: 100dvh;
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+      line-height: 1.5;
+    }
+    button, input, textarea { font: inherit; }
+    button, a, input, textarea { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 3px solid rgba(65, 107, 80, .28);
+      outline-offset: 2px;
+    }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+    [hidden] { display: none !important; }
+
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid rgba(217, 225, 215, .9);
+      background: rgba(255, 254, 251, .94);
+      backdrop-filter: blur(14px);
+    }
+    .header-inner {
+      width: min(1500px, 100%);
+      min-height: 64px;
+      margin: 0 auto;
+      padding: 10px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius);
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 5px 14px rgba(49, 86, 64, .18);
+      font-family: Georgia, serif;
+      font-size: 21px;
+      font-weight: 700;
+    }
+    .brand-copy { min-width: 0; }
+    .brand-copy strong, .brand-copy small { display: block; white-space: nowrap; }
+    .brand-copy strong { font-size: 15px; }
+    .brand-copy small { color: var(--muted); font-size: 11px; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+
+    .button {
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      padding: 8px 13px;
+      background: var(--primary);
+      color: var(--primary-text);
+      font-weight: 650;
+      transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    }
+    .button:hover { background: var(--primary-strong); }
+    .button.secondary {
+      border-color: var(--line);
+      background: var(--surface);
+      color: var(--ink);
+      font-weight: 600;
+    }
+    .button.secondary:hover { border-color: #b8c9ba; background: var(--surface-soft); }
+    .button.danger { border-color: #e6caca; background: #fff7f7; color: var(--danger); }
+    .icon-button {
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 20px;
+      line-height: 1;
+    }
+    .icon-button:hover { background: var(--surface-soft); }
+
+    .shell {
+      width: min(1500px, 100%);
+      margin: 0 auto;
+      padding: 0;
+      display: grid;
+      grid-template-columns: 232px minmax(0, 1fr);
+      gap: 0;
+    }
+    .sidebar { position: sticky; top: 64px; height: calc(100dvh - 64px); align-self: start; padding: 24px 16px; border-right: 1px solid var(--line); background: rgba(255,254,251,.62); }
+    .nav-list { display: grid; gap: 5px; }
+    .nav-button {
+      width: 100%;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 0;
+      border-radius: var(--radius);
+      padding: 9px 11px;
+      background: transparent;
+      color: var(--muted);
+      text-align: left;
+      font-weight: 600;
+    }
+    .nav-button:hover { background: rgba(237, 243, 232, .75); color: var(--ink); }
+    .nav-button[aria-selected="true"] { background: #e5eee1; color: var(--primary-strong); }
+    .nav-icon { width: 22px; text-align: center; font-size: 17px; }
+    .offline-note {
+      margin: 22px 10px 0;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    main { min-width: 0; padding: 32px 48px 56px; background-image: linear-gradient(rgba(111,162,146,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(111,162,146,.045) 1px, transparent 1px); background-size: 24px 24px; }
+    .daily-quote { min-height: 42px; display: grid; place-items: center; border-bottom: 1px solid #d7ebe4; background: #e6f6f3; color: #4e7269; font-size: 13px; }
+    .daily-quote strong { color: var(--primary); }
+    .hero {
+      position: relative;
+      min-height: 260px;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(220px, 36%);
+      align-items: center;
+      gap: 24px;
+      border: 1px solid #d4dfd1;
+      border-radius: var(--radius);
+      background: #eaf2e5;
+      box-shadow: var(--shadow);
+    }
+    .hero-copy { z-index: 1; padding: 34px 0 34px 34px; }
+    .date-line { margin: 0; color: var(--primary); font-size: 14px; font-weight: 700; }
+    .hero h1 {
+      max-width: 16ch;
+      margin: 10px 0 12px;
+      font-size: clamp(29px, 4vw, 43px);
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+    .hero p:last-child { max-width: 36rem; margin: 0; color: var(--muted); font-size: 14px; }
+    #daily-art { width: 100%; height: 100%; min-height: 260px; display: block; }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .summary-item {
+      min-height: 96px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .summary-item span { display: block; color: var(--muted); font-size: 12px; }
+    .summary-item strong { display: block; margin-top: 7px; font-size: 24px; }
+
+    .section {
+      margin-top: 24px;
+      border-top: 1px solid var(--line);
+      padding-top: 22px;
+    }
+    .section-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 14px;
+    }
+    .section-header h2 { margin: 0; font-size: 20px; }
+    .section-header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .section-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .add-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .input, .textarea {
+      width: 100%;
+      border: 1px solid #ccd7cc;
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: inset 0 1px 2px rgba(39, 59, 44, .025);
+    }
+    .input { min-height: 42px; padding: 9px 12px; }
+    .textarea { min-height: 260px; resize: vertical; padding: 15px; line-height: 1.8; }
+    .input::placeholder, .textarea::placeholder { color: #8a968e; }
+
+    .task-list, .habit-list { display: grid; gap: 8px; margin-top: 14px; }
+    .task-item, .habit-item {
+      min-height: 52px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 11px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .check {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #aebcaf;
+      border-radius: 5px;
+      background: white;
+      color: white;
+      font-size: 14px;
+    }
+    .check[aria-checked="true"] { border-color: var(--primary); background: var(--primary); }
+    .task-label.done { color: var(--muted); text-decoration: line-through; }
+    .delete-button {
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #89948d;
+      font-size: 19px;
+    }
+    .delete-button:hover { background: #fff3f3; color: var(--danger); }
+    .habit-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .habit-meta small { color: var(--muted); }
+    .empty-state {
+      margin-top: 14px;
+      padding: 30px 16px;
+      border: 1px dashed #c6d2c5;
+      border-radius: var(--radius);
+      color: var(--muted);
+      text-align: center;
+      font-size: 14px;
+    }
+    .save-status { min-height: 22px; color: var(--muted); font-size: 12px; }
+    .page-heading { margin-bottom: 18px; }
+    .page-heading h1 { margin: 0; font-size: 27px; letter-spacing: 0; }
+    .page-heading p { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+    .eyebrow { color: var(--primary); font-size: 12px; font-weight: 750; }
+    .dashboard-hero { min-height: 218px; grid-template-columns: minmax(0, 1fr) minmax(200px, 32%); }
+    .dashboard-hero .hero-copy { padding-block: 26px; }
+    .dashboard-hero h1 { max-width: 18ch; font-size: clamp(28px, 4vw, 42px); }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .clarity { margin-top: 4px; color: var(--primary); font-size: 31px; font-weight: 800; }
+    .summary-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .summary-item { position: relative; overflow: hidden; box-shadow: 0 4px 16px rgba(41, 67, 49, .035); }
+    .summary-item::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: #a6c4ae; }
+    .summary-item:nth-child(2)::before { background: #e3bd7c; }
+    .summary-item:nth-child(3)::before { background: #9eb6d8; }
+    .summary-item:nth-child(4)::before { background: #dda7b6; }
+    .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(230px, .8fr); gap: 14px; margin-top: 16px; }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px;
+      background: rgba(255, 254, 251, .92);
+      box-shadow: 0 6px 20px rgba(41, 67, 49, .04);
+    }
+    .panel h2, .panel h3 { margin: 0; font-size: 17px; }
+    .panel-copy { margin: 4px 0 14px; color: var(--muted); font-size: 12px; }
+    .action-stack { display: grid; gap: 8px; }
+    .action-stack .button { width: 100%; }
+    .muted-list { display: grid; gap: 7px; margin: 12px 0 0; padding: 0; list-style: none; }
+    .muted-list li { padding: 9px 11px; border: 1px solid #e2e8df; background: #fbfcf8; color: var(--muted); font-size: 13px; }
+    .remarks-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+    .remarks-list .empty-state { grid-column: 1 / -1; margin-top: 0; }
+    .remark-row { display: flex; align-items: flex-start; gap: 8px; padding: 10px; border: 1px solid #e2e8df; background: #fbfcf8; font-size: 13px; }
+    .mini-check { flex: 0 0 auto; width: 19px; height: 19px; border: 1px solid #aebcaf; border-radius: 50%; background: white; color: white; padding: 0; }
+    .mini-check[aria-checked="true"] { background: var(--primary); border-color: var(--primary); }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .form-grid .wide { grid-column: 1 / -1; }
+    .field { display: grid; gap: 6px; }
+    .field > span { color: var(--muted); font-size: 12px; font-weight: 650; }
+    .compact-textarea { min-height: 116px; }
+    .record-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .record-card { position: relative; min-height: 112px; padding: 15px; border: 1px solid var(--line); background: var(--surface); }
+    .record-card h3 { margin: 0 38px 4px 0; font-size: 16px; }
+    .record-card p { margin: 7px 0 0; color: var(--muted); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .record-meta { color: var(--primary); font-size: 11px; font-weight: 700; }
+    .record-actions { position: absolute; top: 8px; right: 8px; display: flex; }
+    .calendar-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .calendar-toolbar strong { font-size: 18px; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+    .calendar-weekday, .calendar-day { min-width: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .calendar-weekday { padding: 8px 4px; background: var(--surface-soft); color: var(--muted); text-align: center; font-size: 12px; font-weight: 700; }
+    .calendar-day { min-height: 92px; padding: 7px; background: var(--surface); }
+    .calendar-day.outside { background: #f7f8f4; color: #a1aaa4; }
+    .calendar-day.today { box-shadow: inset 0 0 0 2px #78a285; }
+    .calendar-date { font-size: 12px; font-weight: 700; }
+    .calendar-dot { display: block; width: 100%; margin-top: 5px; overflow: hidden; color: var(--primary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .plan-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .full-width { grid-column: 1 / -1; }
+    .segmented { display: inline-flex; padding: 3px; border: 1px solid var(--line); background: #f3f6f0; }
+    .segment { border: 0; padding: 7px 12px; background: transparent; color: var(--muted); }
+    .segment.active { background: var(--surface); color: var(--ink); box-shadow: 0 2px 7px rgba(41,67,49,.08); }
+    .category-strip { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+    .category-chip { border: 1px solid var(--line); padding: 6px 11px; background: var(--surface); color: var(--muted); }
+    .category-chip.active { border-color: #a8c3ae; background: var(--surface-soft); color: var(--primary-strong); }
+    .offline-banner { border-bottom: 1px solid #d9e8de; padding: 7px 20px; background: #e8f5ef; color: #557064; text-align: center; font-size: 12px; }
+    .pet-bubble { position: fixed; right: 24px; bottom: 22px; z-index: 30; width: 76px; height: 76px; display: grid; place-items: center; border: 3px solid #d8b18a; border-radius: 50%; background: #f7cda9; box-shadow: 0 8px 20px rgba(83,57,38,.2); font-size: 39px; user-select: none; }
+    .pet-bubble::after { content: "提醒"; position: absolute; right: -5px; bottom: -4px; border: 1px solid #cce0d1; border-radius: 9px; padding: 2px 5px; background: #f4fbf4; color: var(--primary); font-size: 10px; }
+
+    dialog {
+      width: min(430px, calc(100% - 32px));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0;
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 24px 60px rgba(35, 53, 41, .2);
+    }
+    dialog::backdrop { background: rgba(28, 40, 32, .35); backdrop-filter: blur(3px); }
+    .dialog-body { padding: 22px; }
+    .dialog-body h2 { margin: 0 0 8px; font-size: 20px; }
+    .dialog-body p { margin: 0; color: var(--muted); font-size: 14px; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+
+    .mobile-nav { display: none; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 760px) {
+      .header-inner { padding-inline: 14px; }
+      .header-actions .secondary { display: none; }
+      .shell { display: block; padding: 0 0 88px; }
+      .sidebar { display: none; }
+      main { padding: 16px 14px 28px; }
+      .hero { min-height: 245px; grid-template-columns: 1fr; }
+      .hero-copy { padding: 24px 22px 0; }
+      #daily-art { min-height: 110px; height: 110px; }
+      .summary-grid, .summary-grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .summary-item { min-height: 76px; display: flex; align-items: center; justify-content: space-between; }
+      .summary-item strong { margin: 0; }
+      .dashboard-grid, .record-grid, .form-grid, .plan-columns { grid-template-columns: 1fr; }
+      .form-grid .wide, .full-width { grid-column: auto; }
+      .remarks-list { grid-template-columns: 1fr; }
+      .calendar-day { min-height: 65px; padding: 4px; }
+      .calendar-dot { font-size: 9px; }
+      .section-header { align-items: flex-end; }
+      .section-header p { display: none; }
+      .add-row { grid-template-columns: 1fr; }
+      .add-row .button { width: 100%; }
+      .mobile-nav {
+        position: fixed;
+        inset: auto 0 0;
+        z-index: 12;
+        display: grid;
+        grid-template-columns: repeat(7, minmax(74px, 1fr));
+        overflow-x: auto;
+        border-top: 1px solid var(--line);
+        background: rgba(255, 254, 251, .96);
+        backdrop-filter: blur(14px);
+      }
+      .mobile-nav .nav-button { min-height: 58px; justify-content: center; border-radius: 0; font-size: 12px; }
+      .mobile-nav .nav-icon { width: auto; }
+      .pet-bubble { right: 14px; bottom: 70px; width: 62px; height: 62px; font-size: 30px; }
+    }
+
+    @media (max-width: 430px) {
+      .summary-grid, .summary-grid.four { grid-template-columns: 1fr; }
+      .header-actions .icon-button { display: none; }
+      .brand-copy small { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand" aria-label="日常留白离线版">
+        <span class="brand-mark" aria-hidden="true">日</span>
+        <span class="brand-copy"><strong>日常留白</strong><small>个人记录与复盘 · 离线版</small></span>
+      </div>
+      <div class="header-actions">
+        <button class="button secondary" id="export-button" type="button">导出备份</button>
+        <button class="button secondary" id="import-button" type="button">导入备份</button>
+        <button class="icon-button" id="more-button" type="button" aria-label="清空全部数据" title="清空全部数据">×</button>
+        <input class="sr-only" id="import-file" type="file" accept="application/json,.json">
+      </div>
+    </div>
+    <div class="daily-quote" id="daily-quote"><strong>今日一句</strong>　真正的自律，是在疲惫时仍对自己保持温柔。</div>
+  </header>
+
+  <div class="shell">
+    <aside class="sidebar" aria-label="主导航">
+      <nav class="nav-list" role="tablist" aria-orientation="vertical">
+        <span class="eyebrow">工作台</span>
+        <button class="nav-button" type="button" role="tab" aria-selected="true" data-view="dashboard"><span class="nav-icon">▦</span>全景看板</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="calendar"><span class="nav-icon">□</span>日程</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="days"><span class="nav-icon">◇</span>纪念日倒计时</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="review"><span class="nav-icon">▤</span>复盘手记</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="notes"><span class="nav-icon">▱</span>闲思札记</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="plan"><span class="nav-icon">▥</span>当日计划</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="goals"><span class="nav-icon">◎</span>目标与习惯</button>
+      </nav>
+      <p class="offline-note">这是不含任何历史记录的空白副本。可导出 JSON 备份，换浏览器时再手动导入。</p>
+    </aside>
+
+    <main>
+      <section id="view-dashboard" role="tabpanel">
+        <div class="hero dashboard-hero">
+          <div class="hero-copy">
+            <p class="date-line" id="date-line"></p>
+            <h1>把今天过成自己的作品</h1>
+            <p>不追求满分，只把真正重要的事情做得更用心。</p>
+            <div class="clarity" title="当计划很多或思绪很乱时，先写下来，再为一天保留一条主线。">清晰</div>
+            <div class="hero-actions">
+              <button class="button" type="button" data-go="review">写今日复盘</button>
+              <button class="button secondary" type="button" data-go="plan">今日安排</button>
+            </div>
+          </div>
+          <canvas id="daily-art" aria-label="晨光中的枝叶插画" role="img"></canvas>
+        </div>
+
+        <div class="summary-grid four" aria-label="今日概览">
+          <div class="summary-item"><span>待办完成</span><strong id="task-summary">0 / 0</strong></div>
+          <div class="summary-item"><span>习惯打卡</span><strong id="habit-summary">0 / 0</strong></div>
+          <div class="summary-item"><span>复盘手记</span><strong id="review-summary">0</strong></div>
+          <div class="summary-item"><span>闲思札记</span><strong id="note-summary">0</strong></div>
+        </div>
+
+        <div class="panel" style="margin-top:14px">
+          <div class="section-header">
+            <div><h2>今日备注</h2><p id="remark-count">还没有需要留意的内容</p></div>
+            <button class="button secondary" type="button" data-go="plan">查看与修改</button>
+          </div>
+          <div class="remarks-list" id="dashboard-remarks"></div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="panel"><h2>今日安排</h2><p class="panel-copy">仅展示今天的待办、计划与实际完成情况。</p><div id="dashboard-plan"></div></div>
+          <div class="panel"><h2>记录此刻</h2><p class="panel-copy">用三个动作完成今天的记录与复盘。</p><div class="action-stack"><button class="button" type="button" data-go="review">写今日复盘</button><button class="button secondary" type="button" data-go="notes">写一条札记</button><button class="button secondary" type="button" data-go="review" data-review-type="success">记录今天的成功</button></div></div>
+        </div>
+      </section>
+
+      <section id="view-calendar" role="tabpanel" hidden>
+        <div class="page-heading"><h1>日程</h1><p>在月历中查看离线版里记录的待办与纪念日。</p></div>
+        <div class="panel"><div class="calendar-toolbar"><button class="icon-button" id="calendar-prev" type="button" aria-label="上个月">‹</button><strong id="calendar-title"></strong><button class="icon-button" id="calendar-next" type="button" aria-label="下个月">›</button></div><div class="calendar-grid" id="calendar-grid"></div></div>
+      </section>
+
+      <section id="view-days" role="tabpanel" hidden>
+        <div class="page-heading"><h1>纪念日倒计时</h1><p>记录生日、重要事件和自己创建的类型；距离越近的日期排在越前面。</p></div>
+        <form class="panel form-grid" id="day-form">
+          <label class="field"><span>名称</span><input class="input" id="day-title" required maxlength="50" placeholder="例如：重要的一天"></label>
+          <label class="field"><span>日期</span><input class="input" id="day-date" required type="date"></label>
+          <label class="field"><span>类型</span><input class="input" id="day-type" maxlength="20" placeholder="生日 / 重要事件"></label>
+          <label class="field"><span>备注</span><input class="input" id="day-note" maxlength="120" placeholder="可选备注"></label>
+          <div class="wide"><button class="button" type="submit">添加纪念日</button></div>
+        </form>
+        <div class="record-grid section" id="day-list"></div><div class="empty-state" id="day-empty">还没有纪念日，添加后会按距离今天的时间排列。</div>
+      </section>
+
+      <section id="view-review" role="tabpanel" hidden>
+        <div class="page-heading"><h1>复盘手记</h1><p>今日认知复盘与成功日记分开记录，但在这里统一回看。</p></div>
+        <div class="segmented" aria-label="复盘类型"><button class="segment active" type="button" data-review-tab="reflection">今日认知复盘</button><button class="segment" type="button" data-review-tab="success">成功日记</button></div>
+        <form class="panel" id="review-form" style="margin-top:12px"><div class="section-header"><div><h2 id="review-form-title">写今日认知复盘</h2><p>换行会在历史记录中原样保留。</p></div><span class="save-status">保存日期：今天</span></div><textarea class="textarea compact-textarea" id="review-content" required maxlength="12000" placeholder="今天发生了什么？我学到了什么？接下来怎么做？"></textarea><div class="section-actions" style="margin-top:10px"><button class="button" type="submit">保存记录</button></div></form>
+        <div class="section-header section"><div><h2>过往记录</h2><p>最新记录显示在最前面。</p></div></div><div class="record-grid" id="review-list"></div><div class="empty-state" id="review-empty">还没有复盘或成功日记。</div>
+      </section>
+
+      <section id="view-notes" role="tabpanel" hidden>
+        <div class="page-heading"><h1>闲思札记</h1><p>按分类留下灵感、工作思考和实用的生活知识。</p></div>
+        <div class="category-strip" id="note-categories"></div>
+        <form class="panel form-grid" id="note-form">
+          <label class="field"><span>标题</span><input class="input" id="note-title" required maxlength="60" placeholder="这条札记的标题"></label>
+          <label class="field"><span>分类</span><input class="input" id="note-category" required maxlength="20" value="AI" placeholder="AI / 工作 / 生活知识"></label>
+          <label class="field wide"><span>内容</span><textarea class="textarea compact-textarea" id="note-content" required maxlength="12000" placeholder="不必整理，先把此刻留下来。"></textarea></label>
+          <div class="wide"><button class="button" type="submit">添加札记</button></div>
+        </form>
+        <div class="record-grid section" id="note-list"></div><div class="empty-state" id="note-empty">还没有札记。</div>
+      </section>
+
+      <section id="view-plan" role="tabpanel" hidden>
+        <div class="page-heading"><h1>当日计划</h1><p>清空大脑，先计划，再记录实际完成情况；输入时自动保存到本机。</p></div>
+        <form class="plan-columns" id="plan-form">
+          <label class="panel field full-width"><span>待办事项（每行一项）</span><textarea class="textarea compact-textarea" id="plan-todos" placeholder="写下当天所有要做的事"></textarea></label>
+          <label class="panel field"><span>计划完成</span><textarea class="textarea" id="plan-planned" placeholder="例如：08:00-09:00 英语"></textarea></label>
+          <label class="panel field"><span>实际完成</span><textarea class="textarea" id="plan-actual" placeholder="记录当天真实实施情况"></textarea></label>
+          <label class="panel field full-width"><span>备注（每行一项，可在全景看板打勾）</span><textarea class="textarea compact-textarea" id="plan-remarks" placeholder="需要提醒自己的内容"></textarea></label>
+          <label class="panel field full-width"><span>英语听写</span><textarea class="textarea compact-textarea" id="plan-dictation" placeholder="听写内容或完成情况"></textarea></label>
+          <div class="full-width save-status" id="plan-status" role="status" aria-live="polite">修改后会自动保存</div>
+        </form>
+      </section>
+
+      <section id="view-goals" role="tabpanel" hidden>
+        <div class="page-heading"><h1>目标与习惯</h1><p>长期与短期目标分开管理，习惯打卡天数不设上限。</p></div>
+        <div class="dashboard-grid">
+          <div class="panel"><h2>目标</h2><form class="form-grid" id="goal-form" style="margin-top:12px"><label class="field"><span>目标</span><input class="input" id="goal-title" required maxlength="80" placeholder="写下目标"></label><label class="field"><span>周期</span><select class="input" id="goal-type"><option value="short">短期目标</option><option value="long">长期目标</option></select></label><div class="wide"><button class="button" type="submit">添加目标</button></div></form><div class="task-list" id="goal-list"></div><div class="empty-state" id="goal-empty">还没有目标。</div></div>
+          <div class="panel"><h2>习惯打卡</h2><form class="add-row" id="habit-form" style="margin-top:12px"><label class="sr-only" for="habit-input">新增习惯</label><input class="input" id="habit-input" maxlength="30" placeholder="新增一个习惯" autocomplete="off"><button class="button" type="submit">添加</button></form><div class="habit-list" id="habit-list"></div><div class="empty-state" id="habit-empty">还没有习惯项目。</div></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <button class="pet-bubble" id="pet-button" type="button" aria-label="打开离线提醒">🖍️</button>
+
+  <nav class="mobile-nav" aria-label="移动端主导航" role="tablist">
+    <button class="nav-button" type="button" role="tab" aria-selected="true" data-view="dashboard"><span class="nav-icon">▦</span>看板</button>
+    <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="calendar"><span class="nav-icon">□</span>日程</button>
+    <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="days"><span class="nav-icon">◇</span>日子</button>
+    <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="review"><span class="nav-icon">▤</span>复盘</button>
+    <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="notes"><span class="nav-icon">▱</span>札记</button>
+    <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="plan"><span class="nav-icon">▥</span>计划</button>
+    <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="goals"><span class="nav-icon">◎</span>目标</button>
+  </nav>
+
+  <dialog id="clear-dialog" aria-labelledby="clear-title">
+    <div class="dialog-body">
+      <h2 id="clear-title">清空全部离线数据？</h2>
+      <p>本离线页中的日程、纪念日、复盘、札记、计划、目标和习惯都会从当前浏览器中移除。</p>
+      <div class="dialog-actions">
+        <button class="button secondary" id="cancel-clear" type="button">取消</button>
+        <button class="button danger" id="confirm-clear" type="button">确认清空</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script>
+    (() => {
+      "use strict";
+      return;
+
+      const STORAGE_KEY = "daily-space:offline-blank:v2";
+      const today = new Date();
+      const dateKey = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, "0"), String(today.getDate()).padStart(2, "0")].join("-");
+      const defaultState = {
+        version: 1,
+        tasks: [],
+        note: "",
+        habits: []
+      };
+
+      const $ = (selector) => document.querySelector(selector);
+      const $$ = (selector) => [...document.querySelectorAll(selector)];
+      let state = loadState();
+      let noteTimer = 0;
+
+      function loadState() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          if (!parsed || typeof parsed !== "object") return structuredClone(defaultState);
+          return {
+            version: 1,
+            tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
+            note: typeof parsed.note === "string" ? parsed.note : "",
+            habits: Array.isArray(parsed.habits) ? parsed.habits : structuredClone(defaultState.habits)
+          };
+        } catch {
+          return structuredClone(defaultState);
+        }
+      }
+
+      function saveState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        renderSummary();
+      }
+
+      function escapeText(value) {
+        const span = document.createElement("span");
+        span.textContent = value;
+        return span.innerHTML;
+      }
+
+      function formatDate() {
+        const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+        return `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日 · ${weekdays[today.getDay()]}`;
+      }
+
+      function showView(view) {
+        ["today", "notes", "habits"].forEach((name) => {
+          $(`#view-${name}`).hidden = name !== view;
+          $$(`[data-view="${name}"]`).forEach((button) => button.setAttribute("aria-selected", String(name === view)));
+        });
+        window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      }
+
+      function renderTasks() {
+        const container = $("#task-list");
+        container.innerHTML = state.tasks.map((task) => `
+          <div class="task-item" data-task-id="${escapeText(task.id)}">
+            <button class="check" type="button" role="checkbox" aria-checked="${Boolean(task.done)}" aria-label="${task.done ? "取消完成" : "标记完成"}：${escapeText(task.label)}">${task.done ? "✓" : ""}</button>
+            <span class="task-label${task.done ? " done" : ""}">${escapeText(task.label)}</span>
+            <button class="delete-button" type="button" aria-label="删除：${escapeText(task.label)}" title="删除">×</button>
+          </div>`).join("");
+        $("#task-empty").hidden = state.tasks.length > 0;
+        $("#clear-completed").disabled = !state.tasks.some((task) => task.done);
+      }
+
+      function renderHabits() {
+        const container = $("#habit-list");
+        container.innerHTML = state.habits.map((habit) => {
+          const done = habit.dates.includes(dateKey);
+          const count = habit.dates.length;
+          return `
+            <div class="habit-item" data-habit-id="${escapeText(habit.id)}">
+              <button class="check" type="button" role="checkbox" aria-checked="${done}" aria-label="${done ? "取消今日打卡" : "今日打卡"}：${escapeText(habit.name)}">${done ? "✓" : ""}</button>
+              <div class="habit-meta"><span>${escapeText(habit.name)}</span><small>累计 ${count} 天</small></div>
+              <button class="delete-button" type="button" aria-label="删除习惯：${escapeText(habit.name)}" title="删除">×</button>
+            </div>`;
+        }).join("");
+        $("#habit-empty").hidden = state.habits.length > 0;
+      }
+
+      function renderSummary() {
+        const doneTasks = state.tasks.filter((task) => task.done).length;
+        const doneHabits = state.habits.filter((habit) => habit.dates.includes(dateKey)).length;
+        $("#task-summary").textContent = `${doneTasks} / ${state.tasks.length}`;
+        $("#habit-summary").textContent = `${doneHabits} / ${state.habits.length}`;
+        $("#note-summary").textContent = String(state.note.replace(/\s/g, "").length);
+      }
+
+      function renderAll() {
+        renderTasks();
+        renderHabits();
+        renderSummary();
+        $("#note-input").value = state.note;
+      }
+
+      function drawArt() {
+        const canvas = $("#daily-art");
+        const rect = canvas.getBoundingClientRect();
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.max(1, Math.round(rect.width * ratio));
+        canvas.height = Math.max(1, Math.round(rect.height * ratio));
+        const ctx = canvas.getContext("2d");
+        ctx.scale(ratio, ratio);
+        const w = rect.width;
+        const h = rect.height;
+
+        const wash = ctx.createLinearGradient(0, 0, w, h);
+        wash.addColorStop(0, "#dce9d6");
+        wash.addColorStop(1, "#f5e8c8");
+        ctx.fillStyle = wash;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.globalAlpha = .36;
+        ctx.fillStyle = "#fffdf3";
+        ctx.beginPath();
+        ctx.arc(w * .72, h * .28, Math.min(w, h) * .21, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.strokeStyle = "#567660";
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(w * .92, h * 1.02);
+        ctx.bezierCurveTo(w * .76, h * .72, w * .64, h * .55, w * .38, h * .18);
+        ctx.stroke();
+
+        const leaves = [
+          [.78, .74, -.35, 19], [.71, .63, .55, 18], [.64, .54, -.45, 17],
+          [.57, .44, .55, 16], [.50, .35, -.55, 15], [.43, .25, .48, 14]
+        ];
+        leaves.forEach(([x, y, angle, size], index) => {
+          ctx.save();
+          ctx.translate(w * x, h * y);
+          ctx.rotate(angle);
+          ctx.fillStyle = index % 2 ? "#79927a" : "#638269";
+          ctx.beginPath();
+          ctx.ellipse(0, 0, size * 1.5, size * .58, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        });
+      }
+
+      $("#date-line").textContent = formatDate();
+      $$('[data-view]').forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
+
+      $("#task-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const input = $("#task-input");
+        const label = input.value.trim();
+        if (!label) return;
+        state.tasks.push({ id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, label, done: false, createdAt: new Date().toISOString() });
+        input.value = "";
+        saveState();
+        renderTasks();
+      });
+
+      $("#task-list").addEventListener("click", (event) => {
+        const row = event.target.closest("[data-task-id]");
+        if (!row) return;
+        const index = state.tasks.findIndex((task) => task.id === row.dataset.taskId);
+        if (index < 0) return;
+        if (event.target.closest(".check")) state.tasks[index].done = !state.tasks[index].done;
+        if (event.target.closest(".delete-button")) state.tasks.splice(index, 1);
+        saveState();
+        renderTasks();
+      });
+
+      $("#clear-completed").addEventListener("click", () => {
+        state.tasks = state.tasks.filter((task) => !task.done);
+        saveState();
+        renderTasks();
+      });
+
+      $("#note-input").addEventListener("input", (event) => {
+        state.note = event.target.value;
+        $("#save-status").textContent = "正在保存";
+        window.clearTimeout(noteTimer);
+        noteTimer = window.setTimeout(() => {
+          saveState();
+          $("#save-status").textContent = "已保存到本机";
+        }, 350);
+        renderSummary();
+      });
+
+      $("#habit-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const input = $("#habit-input");
+        const name = input.value.trim();
+        if (!name || state.habits.some((habit) => habit.name === name)) return;
+        state.habits.push({ id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name, dates: [] });
+        input.value = "";
+        saveState();
+        renderHabits();
+      });
+
+      $("#habit-list").addEventListener("click", (event) => {
+        const row = event.target.closest("[data-habit-id]");
+        if (!row) return;
+        const index = state.habits.findIndex((habit) => habit.id === row.dataset.habitId);
+        if (index < 0) return;
+        if (event.target.closest(".check")) {
+          const dates = state.habits[index].dates;
+          state.habits[index].dates = dates.includes(dateKey) ? dates.filter((date) => date !== dateKey) : [...dates, dateKey];
+        }
+        if (event.target.closest(".delete-button")) state.habits.splice(index, 1);
+        saveState();
+        renderHabits();
+      });
+
+      $("#export-button").addEventListener("click", () => {
+        saveState();
+        const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), data: state }, null, 2)], { type: "application/json" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `daily-space-offline-${dateKey}.json`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+      });
+
+      $("#import-button").addEventListener("click", () => $("#import-file").click());
+      $("#import-file").addEventListener("change", async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+          const parsed = JSON.parse(await file.text());
+          const imported = parsed.data || parsed;
+          if (!Array.isArray(imported.tasks) || typeof imported.note !== "string" || !Array.isArray(imported.habits)) throw new Error("invalid");
+          state = { version: 1, tasks: imported.tasks, note: imported.note, habits: imported.habits };
+          saveState();
+          renderAll();
+        } catch {
+          window.alert("无法读取这个备份文件。请确认它由本离线页面导出。");
+        } finally {
+          event.target.value = "";
+        }
+      });
+
+      const clearDialog = $("#clear-dialog");
+      $("#more-button").addEventListener("click", () => clearDialog.showModal());
+      $("#cancel-clear").addEventListener("click", () => clearDialog.close());
+      $("#confirm-clear").addEventListener("click", () => {
+        state = structuredClone(defaultState);
+        localStorage.removeItem(STORAGE_KEY);
+        renderAll();
+        clearDialog.close();
+      });
+
+      renderAll();
+      drawArt();
+      window.addEventListener("resize", drawArt, { passive: true });
+    })();
+  </script>
+  <script>
+    (() => {
+      "use strict";
+
+      const STORAGE_KEY = "daily-space:offline-blank:v2";
+      const today = new Date();
+      const dateKey = toDateKey(today);
+      const defaultState = {
+        version: 2,
+        tasks: [],
+        note: "",
+        habits: [],
+        days: [],
+        reviews: [],
+        notes: [],
+        goals: [],
+        plan: { date: dateKey, todos: "", planned: "", actual: "", remarks: "", completedRemarks: [], dictation: "" }
+      };
+      const views = ["dashboard", "calendar", "days", "review", "notes", "plan", "goals"];
+      const $ = (selector) => document.querySelector(selector);
+      const $$ = (selector) => [...document.querySelectorAll(selector)];
+      let state = loadState();
+      let reviewType = "reflection";
+      let noteFilter = "全部";
+      let calendarCursor = new Date(today.getFullYear(), today.getMonth(), 1);
+      let saveTimer = 0;
+
+      function clone(value) { return JSON.parse(JSON.stringify(value)); }
+      function uid() { return `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+      function toDateKey(value) { return [value.getFullYear(), String(value.getMonth() + 1).padStart(2, "0"), String(value.getDate()).padStart(2, "0")].join("-"); }
+      function lines(value) { return String(value || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean); }
+      function escapeText(value) { const span = document.createElement("span"); span.textContent = String(value ?? ""); return span.innerHTML; }
+      function formatShortDate(value) { const date = new Date(`${value}T00:00:00`); return Number.isNaN(date.getTime()) ? value : `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`; }
+      function formatToday() { const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]; return `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日 · ${weekdays[today.getDay()]}`; }
+
+      function normalize(source) {
+        const parsed = source && typeof source === "object" ? source : {};
+        return {
+          ...clone(defaultState), ...parsed, version: 2,
+          tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [], habits: Array.isArray(parsed.habits) ? parsed.habits : [],
+          days: Array.isArray(parsed.days) ? parsed.days : [], reviews: Array.isArray(parsed.reviews) ? parsed.reviews : [],
+          notes: Array.isArray(parsed.notes) ? parsed.notes : [], goals: Array.isArray(parsed.goals) ? parsed.goals : [],
+          plan: parsed.plan && typeof parsed.plan === "object" ? { ...clone(defaultState.plan), ...parsed.plan } : clone(defaultState.plan)
+        };
+      }
+      function loadState() { try { return normalize(JSON.parse(localStorage.getItem(STORAGE_KEY))); } catch { return clone(defaultState); } }
+      function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); renderSummary(); }
+
+      function showView(view) {
+        if (!views.includes(view)) return;
+        views.forEach((name) => {
+          $(`#view-${name}`).hidden = name !== view;
+          $$(`[data-view="${name}"]`).forEach((button) => button.setAttribute("aria-selected", String(name === view)));
+        });
+        if (view === "dashboard") renderDashboard();
+        if (view === "calendar") renderCalendar();
+        window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      }
+
+      function renderSummary() {
+        $("#task-summary").textContent = `${state.tasks.filter((item) => item.done).length} / ${state.tasks.length}`;
+        $("#habit-summary").textContent = `${state.habits.filter((item) => item.dates.includes(dateKey)).length} / ${state.habits.length}`;
+        $("#review-summary").textContent = String(state.reviews.length);
+        $("#note-summary").textContent = String(state.notes.length);
+      }
+
+      function renderDashboard() {
+        const remarks = lines(state.plan.remarks);
+        const remaining = remarks.filter((_, index) => !state.plan.completedRemarks.includes(index)).length;
+        $("#remark-count").textContent = remarks.length ? `还有 ${remaining} 条需要留意` : "还没有需要留意的内容";
+        $("#dashboard-remarks").innerHTML = remarks.length ? remarks.map((remark, index) => {
+          const done = state.plan.completedRemarks.includes(index);
+          return `<div class="remark-row"><button class="mini-check" data-remark-index="${index}" type="button" role="checkbox" aria-checked="${done}" aria-label="${done ? "取消完成" : "标记完成"}">${done ? "✓" : ""}</button><span class="task-label${done ? " done" : ""}">${escapeText(remark)}</span></div>`;
+        }).join("") : '<div class="empty-state">今日还没有备注，可在“当日计划”中添加。</div>';
+        const todoItems = lines(state.plan.todos);
+        const plannedItems = lines(state.plan.planned);
+        const actualItems = lines(state.plan.actual);
+        const items = [
+          ...todoItems.slice(0, 3).map((text) => `待办 · ${text}`),
+          ...plannedItems.slice(0, 2).map((text) => `计划 · ${text}`),
+          ...actualItems.slice(0, 2).map((text) => `实际 · ${text}`)
+        ];
+        $("#dashboard-plan").innerHTML = items.length ? `<ul class="muted-list">${items.map((item) => `<li>${escapeText(item)}</li>`).join("")}</ul>` : '<div class="empty-state">今天还没有安排。</div>';
+      }
+
+      function nextOccurrence(value) {
+        const source = new Date(`${value}T00:00:00`);
+        const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        if (Number.isNaN(source.getTime())) return { date: new Date(8640000000000000), days: 0 };
+        let next = new Date(today.getFullYear(), source.getMonth(), source.getDate());
+        if (next < start) next = new Date(today.getFullYear() + 1, source.getMonth(), source.getDate());
+        return { date: next, days: Math.round((next - start) / 86400000) };
+      }
+      function renderDays() {
+        const items = [...state.days].sort((a, b) => nextOccurrence(a.date).date - nextOccurrence(b.date).date);
+        $("#day-list").innerHTML = items.map((item) => {
+          const days = nextOccurrence(item.date).days;
+          return `<article class="record-card" data-day-id="${escapeText(item.id)}"><div class="record-actions"><button class="delete-button" type="button" title="删除" aria-label="删除">×</button></div><span class="record-meta">${escapeText(item.type || "特别日子")} · ${days === 0 ? "就是今天" : `还有 ${days} 天`}</span><h3>${escapeText(item.title)}</h3><p>${escapeText(formatShortDate(item.date))}${item.note ? `\n${escapeText(item.note)}` : ""}</p></article>`;
+        }).join("");
+        $("#day-empty").hidden = items.length > 0;
+      }
+
+      function renderReviews() {
+        const items = [...state.reviews].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+        $("#review-list").innerHTML = items.map((item) => `<article class="record-card" data-review-id="${escapeText(item.id)}"><div class="record-actions"><button class="delete-button" type="button" title="删除" aria-label="删除">×</button></div><span class="record-meta">${item.type === "success" ? "成功日记" : "认知复盘"} · ${escapeText(formatShortDate(item.date))}</span><p>${escapeText(item.content)}</p></article>`).join("");
+        $("#review-empty").hidden = items.length > 0;
+      }
+
+      function renderNotes() {
+        const categories = ["全部", "AI", "工作", "生活知识", ...state.notes.map((item) => item.category)].filter((value, index, array) => value && array.indexOf(value) === index);
+        $("#note-categories").innerHTML = categories.map((category) => `<button class="category-chip${category === noteFilter ? " active" : ""}" type="button" data-note-filter="${escapeText(category)}">${escapeText(category)}</button>`).join("");
+        const items = state.notes.filter((item) => noteFilter === "全部" || item.category === noteFilter).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+        $("#note-list").innerHTML = items.map((item) => `<article class="record-card" data-note-id="${escapeText(item.id)}"><div class="record-actions"><button class="delete-button" type="button" title="删除" aria-label="删除">×</button></div><span class="record-meta">${escapeText(item.category)} · ${escapeText(formatShortDate(item.date))}</span><h3>${escapeText(item.title)}</h3><p>${escapeText(item.content)}</p></article>`).join("");
+        $("#note-empty").hidden = items.length > 0;
+      }
+
+      function renderHabits() {
+        $("#habit-list").innerHTML = state.habits.map((habit) => {
+          const done = habit.dates.includes(dateKey);
+          return `<div class="habit-item" data-habit-id="${escapeText(habit.id)}"><button class="check" type="button" role="checkbox" aria-checked="${done}" aria-label="${done ? "取消今日打卡" : "今日打卡"}">${done ? "✓" : ""}</button><div class="habit-meta"><span>${escapeText(habit.name)}</span><small>累计 ${habit.dates.length} 天</small></div><button class="delete-button" type="button" title="删除" aria-label="删除">×</button></div>`;
+        }).join("");
+        $("#habit-empty").hidden = state.habits.length > 0;
+      }
+
+      function renderGoals() {
+        $("#goal-list").innerHTML = state.goals.map((goal) => `<div class="task-item" data-goal-id="${escapeText(goal.id)}"><button class="check" type="button" role="checkbox" aria-checked="${Boolean(goal.done)}" aria-label="${goal.done ? "取消完成" : "标记完成"}">${goal.done ? "✓" : ""}</button><span class="task-label${goal.done ? " done" : ""}">${goal.type === "long" ? "长期" : "短期"} · ${escapeText(goal.title)}</span><button class="delete-button" type="button" title="删除" aria-label="删除">×</button></div>`).join("");
+        $("#goal-empty").hidden = state.goals.length > 0;
+      }
+
+      function renderCalendar() {
+        const year = calendarCursor.getFullYear();
+        const month = calendarCursor.getMonth();
+        $("#calendar-title").textContent = `${year}年${month + 1}月`;
+        const first = new Date(year, month, 1);
+        const start = new Date(year, month, 1 - first.getDay());
+        let html = ["日", "一", "二", "三", "四", "五", "六"].map((day) => `<div class="calendar-weekday">${day}</div>`).join("");
+        for (let index = 0; index < 42; index += 1) {
+          const current = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index);
+          const key = toDateKey(current);
+          const labels = [];
+          if (key === dateKey) labels.push(...lines(state.plan.todos).slice(0, 2));
+          state.days.filter((item) => String(item.date).slice(5) === key.slice(5)).forEach((item) => labels.push(item.title));
+          html += `<div class="calendar-day${current.getMonth() !== month ? " outside" : ""}${key === dateKey ? " today" : ""}"><span class="calendar-date">${current.getDate()}</span>${labels.slice(0, 3).map((label) => `<span class="calendar-dot">${escapeText(label)}</span>`).join("")}</div>`;
+        }
+        $("#calendar-grid").innerHTML = html;
+      }
+
+      function renderAll() {
+        renderSummary(); renderDashboard(); renderDays(); renderReviews(); renderNotes(); renderHabits(); renderGoals(); renderCalendar();
+        ["todos", "planned", "actual", "remarks", "dictation"].forEach((field) => { $(`#plan-${field}`).value = state.plan[field] || ""; });
+      }
+
+      function drawArt() {
+        const canvas = $("#daily-art"); const rect = canvas.getBoundingClientRect(); const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.max(1, Math.round(rect.width * ratio)); canvas.height = Math.max(1, Math.round(rect.height * ratio));
+        const ctx = canvas.getContext("2d"); ctx.scale(ratio, ratio); const w = rect.width; const h = rect.height;
+        const wash = ctx.createLinearGradient(0, 0, w, h); wash.addColorStop(0, "#d7eee5"); wash.addColorStop(1, "#fff0c7"); ctx.fillStyle = wash; ctx.fillRect(0, 0, w, h);
+        ctx.globalAlpha = .55; ctx.fillStyle = "#fffdf3"; ctx.beginPath(); ctx.arc(w * .72, h * .28, Math.min(w, h) * .2, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+        ctx.strokeStyle = "#51775f"; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(w * .95, h * 1.03); ctx.bezierCurveTo(w * .78, h * .72, w * .65, h * .53, w * .36, h * .14); ctx.stroke();
+        [[.79,.75,-.35,19],[.72,.64,.55,18],[.64,.53,-.45,17],[.56,.42,.55,16],[.48,.31,-.55,15]].forEach(([x,y,angle,size], index) => { ctx.save(); ctx.translate(w*x,h*y); ctx.rotate(angle); ctx.fillStyle = index % 2 ? "#7d9a83" : "#5c8369"; ctx.beginPath(); ctx.ellipse(0,0,size*1.5,size*.58,0,0,Math.PI*2); ctx.fill(); ctx.restore(); });
+      }
+
+      $("#date-line").textContent = formatToday();
+      $$('[data-view]').forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
+      $$('[data-go]').forEach((button) => button.addEventListener("click", () => { if (button.dataset.reviewType) setReviewType(button.dataset.reviewType); showView(button.dataset.go); }));
+      $("#dashboard-remarks").addEventListener("click", (event) => { const button = event.target.closest("[data-remark-index]"); if (!button) return; const index = Number(button.dataset.remarkIndex); state.plan.completedRemarks = state.plan.completedRemarks.includes(index) ? state.plan.completedRemarks.filter((item) => item !== index) : [...state.plan.completedRemarks, index]; saveState(); renderDashboard(); });
+
+      function setReviewType(type) { reviewType = type; $$('[data-review-tab]').forEach((button) => button.classList.toggle("active", button.dataset.reviewTab === type)); $("#review-form-title").textContent = type === "success" ? "记录今天的成功" : "写今日认知复盘"; $("#review-content").placeholder = type === "success" ? "今天做成了什么？一件小事也值得记录。" : "今天发生了什么？我学到了什么？接下来怎么做？"; }
+      $$('[data-review-tab]').forEach((button) => button.addEventListener("click", () => setReviewType(button.dataset.reviewTab)));
+      $("#review-form").addEventListener("submit", (event) => { event.preventDefault(); const input = $("#review-content"); const content = input.value.trim(); if (!content) return; state.reviews.push({ id: uid(), type: reviewType, content, date: dateKey, createdAt: new Date().toISOString() }); input.value = ""; saveState(); renderReviews(); });
+      $("#review-list").addEventListener("click", (event) => { const row = event.target.closest("[data-review-id]"); if (!row || !event.target.closest(".delete-button")) return; state.reviews = state.reviews.filter((item) => item.id !== row.dataset.reviewId); saveState(); renderReviews(); });
+      $("#note-form").addEventListener("submit", (event) => { event.preventDefault(); const title = $("#note-title").value.trim(); const category = $("#note-category").value.trim(); const content = $("#note-content").value.trim(); if (!title || !category || !content) return; state.notes.push({ id: uid(), title, category, content, date: dateKey, createdAt: new Date().toISOString() }); $("#note-title").value = ""; $("#note-content").value = ""; noteFilter = "全部"; saveState(); renderNotes(); });
+      $("#note-categories").addEventListener("click", (event) => { const button = event.target.closest("[data-note-filter]"); if (!button) return; noteFilter = button.dataset.noteFilter; renderNotes(); });
+      $("#note-list").addEventListener("click", (event) => { const row = event.target.closest("[data-note-id]"); if (!row || !event.target.closest(".delete-button")) return; state.notes = state.notes.filter((item) => item.id !== row.dataset.noteId); saveState(); renderNotes(); });
+      $("#day-form").addEventListener("submit", (event) => { event.preventDefault(); const title = $("#day-title").value.trim(); const date = $("#day-date").value; if (!title || !date) return; state.days.push({ id: uid(), title, date, type: $("#day-type").value.trim(), note: $("#day-note").value.trim(), createdAt: new Date().toISOString() }); event.currentTarget.reset(); saveState(); renderDays(); renderCalendar(); });
+      $("#day-list").addEventListener("click", (event) => { const row = event.target.closest("[data-day-id]"); if (!row || !event.target.closest(".delete-button")) return; state.days = state.days.filter((item) => item.id !== row.dataset.dayId); saveState(); renderDays(); renderCalendar(); });
+      $("#goal-form").addEventListener("submit", (event) => { event.preventDefault(); const input = $("#goal-title"); const title = input.value.trim(); if (!title) return; state.goals.push({ id: uid(), title, type: $("#goal-type").value, done: false, createdAt: new Date().toISOString() }); input.value = ""; saveState(); renderGoals(); });
+      $("#goal-list").addEventListener("click", (event) => { const row = event.target.closest("[data-goal-id]"); if (!row) return; const goal = state.goals.find((item) => item.id === row.dataset.goalId); if (!goal) return; if (event.target.closest(".check")) goal.done = !goal.done; if (event.target.closest(".delete-button")) state.goals = state.goals.filter((item) => item.id !== goal.id); saveState(); renderGoals(); });
+      $("#habit-form").addEventListener("submit", (event) => { event.preventDefault(); const input = $("#habit-input"); const name = input.value.trim(); if (!name || state.habits.some((item) => item.name === name)) return; state.habits.push({ id: uid(), name, dates: [] }); input.value = ""; saveState(); renderHabits(); });
+      $("#habit-list").addEventListener("click", (event) => { const row = event.target.closest("[data-habit-id]"); if (!row) return; const habit = state.habits.find((item) => item.id === row.dataset.habitId); if (!habit) return; if (event.target.closest(".check")) habit.dates = habit.dates.includes(dateKey) ? habit.dates.filter((date) => date !== dateKey) : [...habit.dates, dateKey]; if (event.target.closest(".delete-button")) state.habits = state.habits.filter((item) => item.id !== habit.id); saveState(); renderHabits(); });
+      ["todos", "planned", "actual", "remarks", "dictation"].forEach((field) => { $(`#plan-${field}`).addEventListener("input", (event) => { state.plan[field] = event.target.value; if (field === "todos") state.tasks = lines(event.target.value).map((label, index) => ({ id: `${dateKey}-${index}`, label, done: state.tasks[index]?.done || false })); if (field === "remarks") state.plan.completedRemarks = state.plan.completedRemarks.filter((index) => index < lines(event.target.value).length); $("#plan-status").textContent = "正在保存到本机"; clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveState(); renderDashboard(); renderCalendar(); $("#plan-status").textContent = "已自动保存到本机"; }, 300); }); });
+      $("#calendar-prev").addEventListener("click", () => { calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() - 1, 1); renderCalendar(); });
+      $("#calendar-next").addEventListener("click", () => { calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 1); renderCalendar(); });
+      $("#pet-button").addEventListener("click", () => { alert("离线提醒：先写下今天最重要的一件事。联网版的飞书提醒功能未在此离线副本中启用。"); });
+
+      $("#export-button").addEventListener("click", () => { saveState(); const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), data: state }, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `daily-space-offline-${dateKey}.json`; link.click(); URL.revokeObjectURL(link.href); });
+      $("#import-button").addEventListener("click", () => $("#import-file").click());
+      $("#import-file").addEventListener("change", async (event) => { const file = event.target.files[0]; if (!file) return; try { const parsed = JSON.parse(await file.text()); state = normalize(parsed.data || parsed); saveState(); renderAll(); } catch { alert("无法读取这个备份文件。请确认它由本离线页面导出。"); } finally { event.target.value = ""; } });
+      const clearDialog = $("#clear-dialog"); $("#more-button").addEventListener("click", () => clearDialog.showModal()); $("#cancel-clear").addEventListener("click", () => clearDialog.close()); $("#confirm-clear").addEventListener("click", () => { state = clone(defaultState); localStorage.removeItem(STORAGE_KEY); renderAll(); clearDialog.close(); showView("dashboard"); });
+
+      renderAll(); drawArt(); window.addEventListener("resize", drawArt, { passive: true });
+    })();
+  </script>
+</body>
+</html>
