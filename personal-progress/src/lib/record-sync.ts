@@ -15,6 +15,7 @@ import {
   type StorageAdapter,
   type StoredRecords,
 } from "@/lib/storage-contract";
+import { mergeRecoveredRecords } from "@/lib/record-backup";
 
 const REMOTE_METADATA_KEY = "__daily_space_sync_metadata__";
 const SYNC_VERSION = 1;
@@ -88,7 +89,8 @@ function parseSyncState(value: Partial<AccountSyncState>): AccountSyncState {
         ? parseMetadata(JSON.stringify(value.metadata))
         : emptyMetadata(),
     lastRemoteRecords: sanitizeStoredRecords(value.lastRemoteRecords),
-    ...(typeof value.lastRemoteUpdatedAt === "string"
+    ...(typeof value.lastRemoteUpdatedAt === "string" &&
+    Number.isFinite(Date.parse(value.lastRemoteUpdatedAt))
       ? { lastRemoteUpdatedAt: value.lastRemoteUpdatedAt }
       : {}),
   };
@@ -205,6 +207,16 @@ export class RecordSynchronizer {
       )
     ) {
       this.notify();
+    }
+    const state = parseSyncState(
+      readAccountSyncState<AccountSyncState>(this.storage, this.userId),
+    );
+    // Metadata can be created while the browser is offline. Until a remote
+    // snapshot has actually been read or written, merge local and cloud data
+    // as an initial bootstrap instead of letting one device replace the other.
+    if (!state.lastRemoteUpdatedAt) {
+      await this.bootstrapSync();
+      return;
     }
     this.captureLocalChanges();
     await this.sync();
@@ -337,6 +349,73 @@ export class RecordSynchronizer {
       metadata: merged.metadata,
       lastRemoteRecords: merged.records,
       lastRemoteUpdatedAt: savedAt,
+    } satisfies AccountSyncState);
+    if (visibleChanged) this.notify();
+  }
+
+  private async bootstrapSync() {
+    const localRecords = collectStoredRecords(this.storage);
+    const { data, error } = await this.client
+      .from("user_records")
+      .select("records,updated_at")
+      .eq("user_id", this.userId)
+      .maybeSingle<UserRecordRow>();
+    if (error) throw error;
+    if (!this.active) return;
+
+    const rawRemote =
+      data?.records && typeof data.records === "object"
+        ? (data.records as Record<string, unknown>)
+        : {};
+    const remoteRecords = sanitizeStoredRecords(rawRemote);
+    if (!data || Object.keys(remoteRecords).length === 0) {
+      this.captureLocalChanges();
+      await this.sync();
+      return;
+    }
+
+    const remoteUpdatedAt = validTimestamp(
+      data.updated_at,
+      new Date(0).toISOString(),
+    );
+    const remoteMetadata = deriveRemoteMetadata(
+      remoteRecords,
+      parseMetadata(rawRemote[REMOTE_METADATA_KEY]),
+      remoteUpdatedAt,
+      {},
+    );
+    const mergedRecords = mergeRecoveredRecords(localRecords, remoteRecords);
+    const mergedMetadata = emptyMetadata();
+    const now = this.now().toISOString();
+    for (const [key, value] of Object.entries(mergedRecords)) {
+      mergedMetadata.keys[key] =
+        remoteRecords[key] === value && remoteMetadata.keys[key]
+          ? remoteMetadata.keys[key]
+          : { updatedAt: now };
+    }
+
+    const visibleChanged = !storedRecordsEqual(localRecords, mergedRecords);
+    replaceStoredRecords(this.storage, mergedRecords);
+    writeAccountRecords(this.storage, this.userId, mergedRecords);
+    const recordsForRemote: Record<string, string> = {
+      ...mergedRecords,
+      [REMOTE_METADATA_KEY]: serializeMetadata(mergedMetadata),
+    };
+    const { error: saveError } = await this.client.from("user_records").upsert(
+      {
+        user_id: this.userId,
+        records: recordsForRemote,
+        updated_at: now,
+      },
+      { onConflict: "user_id" },
+    );
+    if (saveError) throw saveError;
+    if (!this.active) return;
+
+    writeAccountSyncState(this.storage, this.userId, {
+      metadata: mergedMetadata,
+      lastRemoteRecords: mergedRecords,
+      lastRemoteUpdatedAt: now,
     } satisfies AccountSyncState);
     if (visibleChanged) this.notify();
   }
