@@ -308,9 +308,29 @@ export class RecordSynchronizer {
       remoteUpdatedAt,
       state.lastRemoteRecords,
     );
+    // A device can carry an old/future clock from a previous cloud snapshot.
+    // If its visible value is still exactly that last snapshot, it has no
+    // unsynced edit for this key, so a different value from the cloud must be
+    // allowed to win regardless of that stale local clock.
+    const localMetadata: SyncMetadata = {
+      version: SYNC_VERSION,
+      keys: { ...state.metadata.keys },
+    };
+    for (const key of new Set([
+      ...Object.keys(state.lastRemoteRecords),
+      ...Object.keys(localRecords),
+      ...Object.keys(remoteRecords),
+    ])) {
+      if (
+        localRecords[key] === state.lastRemoteRecords[key] &&
+        remoteRecords[key] !== state.lastRemoteRecords[key]
+      ) {
+        delete localMetadata.keys[key];
+      }
+    }
     const merged = mergeVersionedRecords(
       localRecords,
-      state.metadata,
+      localMetadata,
       remoteRecords,
       remoteMetadata,
     );
