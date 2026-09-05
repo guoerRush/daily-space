@@ -12,16 +12,21 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     if (!supabase) return;
     let active = true;
+    const isRecovery = new URLSearchParams(window.location.search).get("mode") === "recovery"
+      || window.location.hash.includes("type=recovery");
+    const finishSession = () => {
+      window.history.replaceState(null, "", isRecovery ? "/auth/reset-password" : "/auth/callback");
+      router.replace(isRecovery ? "/auth/reset-password" : "/");
+    };
     const finish = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (!active) return;
       if (error || !session) { setMessage("确认链接无效或已过期，请返回登录页重新注册或登录。"); return; }
-      window.history.replaceState(null, "", "/auth/callback");
-      router.replace("/");
+      finishSession();
     };
     void finish();
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) { window.history.replaceState(null, "", "/auth/callback"); router.replace("/"); }
+      if (session) finishSession();
     });
     return () => { active = false; subscription.unsubscribe(); };
   }, [router, supabase]);

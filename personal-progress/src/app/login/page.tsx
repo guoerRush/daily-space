@@ -9,7 +9,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { Input } from "@/components/ui/input";
 import { getSupabaseClient } from "@/lib/supabase";
 
-type Mode = "login" | "register";
+type Mode = "login" | "register" | "reset";
 
 export default function LoginPage() {
   return <Suspense fallback={<main className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">正在准备登录...</main>}><LoginForm /></Suspense>;
@@ -53,8 +53,8 @@ function LoginForm() {
       setHasError(true);
       return;
     }
-    if (!email.trim() || password.length < 6) {
-      setMessage("请输入邮箱和至少 6 位密码。");
+    if (!email.trim() || (mode !== "reset" && password.length < 6)) {
+      setMessage(mode === "reset" ? "请输入注册时使用的邮箱。" : "请输入邮箱和至少 6 位密码。");
       setHasError(true);
       return;
     }
@@ -62,9 +62,11 @@ function LoginForm() {
     setSubmitting(true);
     setMessage("");
     setHasError(false);
-    const result = mode === "register"
-      ? await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: `${window.location.origin}/auth/callback` } })
-      : await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const result = mode === "reset"
+      ? await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/auth/callback?mode=recovery` })
+      : mode === "register"
+        ? await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: `${window.location.origin}/auth/callback` } })
+        : await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setSubmitting(false);
 
     if (result.error) {
@@ -72,7 +74,12 @@ function LoginForm() {
       setHasError(true);
       return;
     }
-    if (mode === "register" && !result.data.session) {
+    if (mode === "reset") {
+      setMessage("重置链接已发送，请检查邮箱（也请查看垃圾邮件）。");
+      setHasError(false);
+      return;
+    }
+    if (mode === "register" && "session" in result.data && !result.data.session) {
       setMessage("注册成功，请在邮箱中确认后继续登录。");
       setHasError(false);
       return;
@@ -80,14 +87,18 @@ function LoginForm() {
     router.replace(destination);
   };
 
-  const switchMode = () => {
-    setMode((current) => current === "login" ? "register" : "login");
+  const switchMode = (nextMode: Mode) => {
+    setMode(nextMode);
     setMessage("");
     setHasError(false);
   };
 
-  const title = mode === "login" ? "登录账号" : "注册账号";
-  const description = mode === "login" ? "登录后继续使用你的个人记录空间。" : "创建账号后，你的记录将归属于自己的账户。";
+  const title = mode === "login" ? "登录账号" : mode === "register" ? "注册账号" : "重置密码";
+  const description = mode === "login"
+    ? "登录后继续使用你的个人记录空间。"
+    : mode === "register"
+      ? "创建账号后，你的记录将归属于自己的账户。"
+      : "输入注册邮箱，我们会发送安全的重置链接。";
 
   return <main className="grid min-h-screen bg-background lg:grid-cols-[minmax(0,1fr)_28rem]">
     <section className="hidden min-h-screen flex-col justify-between bg-secondary p-10 lg:flex">
@@ -107,24 +118,32 @@ function LoginForm() {
                 <FieldLabel htmlFor="email">邮箱</FieldLabel>
                 <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" autoComplete="email" aria-invalid={hasError} disabled={submitting} />
               </Field>
-              <Field data-invalid={hasError}>
+              {mode !== "reset" ? <Field data-invalid={hasError}>
                 <FieldLabel htmlFor="password">密码</FieldLabel>
                 <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 6 位" autoComplete={mode === "login" ? "current-password" : "new-password"} aria-invalid={hasError} disabled={submitting} />
                 {mode === "register" ? <FieldDescription>使用至少 6 位的密码。</FieldDescription> : null}
-              </Field>
+              </Field> : null}
               {message ? hasError ? <FieldError>{message}</FieldError> : <FieldDescription>{message}</FieldDescription> : null}
               {isSetupMissing ? <FieldError>账号服务尚未配置，请联系网站管理员完成 Supabase 配置。</FieldError> : null}
               <Button type="submit" size="lg" disabled={submitting || isSetupMissing}>
                 {mode === "register" ? <UserPlus data-icon="inline-start" /> : null}
-                {submitting ? "请稍候" : mode === "login" ? "登录并进入" : "注册账号"}
+                {submitting ? "请稍候" : mode === "login" ? "登录并进入" : mode === "register" ? "注册账号" : "发送重置邮件"}
                 {mode === "login" ? <ArrowRight data-icon="inline-end" /> : null}
               </Button>
             </FieldGroup>
           </form>
         </CardContent>
         <CardFooter className="justify-between gap-3">
-          <span className="text-sm text-muted-foreground">{mode === "login" ? "还没有账号？" : "已经有账号？"}</span>
-          <Button type="button" variant="link" onClick={switchMode} disabled={submitting}>{mode === "login" ? "注册" : "去登录"}</Button>
+          {mode === "login" ? <>
+            <span className="text-sm text-muted-foreground">还没有账号？</span>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="link" onClick={() => switchMode("reset")} disabled={submitting}>忘记密码</Button>
+              <Button type="button" variant="link" onClick={() => switchMode("register")} disabled={submitting}>注册</Button>
+            </div>
+          </> : <>
+            <span className="text-sm text-muted-foreground">{mode === "register" ? "已经有账号？" : "想起密码了？"}</span>
+            <Button type="button" variant="link" onClick={() => switchMode("login")} disabled={submitting}>返回登录</Button>
+          </>}
         </CardFooter>
       </Card>
     </section>
