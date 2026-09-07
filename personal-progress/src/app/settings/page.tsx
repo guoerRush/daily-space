@@ -17,8 +17,22 @@ import {
   Upload,
 } from "lucide-react";
 import { AppFrame } from "@/components/app-frame";
+import { RecordTimestamp } from "@/components/record-timestamp";
 import { getReminderSettings, saveReminderSettings } from "@/lib/reminder";
 import { FeishuInboxConnect } from "@/components/feishu-inbox-connect";
+import { CloudRecoveryPanel } from "@/components/cloud-recovery-panel";
+import { LocalBackupPanel } from "@/components/local-backup-panel";
+import {
+  createDataBackup,
+  restoreDataBackup,
+  serializeDataBackup,
+} from "@/lib/record-backup";
+import { parsePendingLocalImport } from "@/lib/local-backup";
+import {
+  listSuccessJournals,
+  mergeSuccessJournalLines,
+  parseSuccessJournalMarkdown,
+} from "@/lib/success-journals";
 
 function ClientOnly({ children }: { children: ReactNode }) {
   const ready = useSyncExternalStore(
@@ -27,6 +41,23 @@ function ClientOnly({ children }: { children: ReactNode }) {
     () => false,
   );
   return ready ? <>{children}</> : null;
+}
+
+async function readImportFile(file: File) {
+  if (typeof file.text === "function") {
+    try {
+      return await file.text();
+    } catch {
+      // A few mobile document providers expose File.text() but reject it.
+      // Fall through to the older FileReader API in that case.
+    }
+  }
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("无法读取文件。"));
+    reader.readAsText(file, "utf-8");
+  });
 }
 
 export default function SettingsPage() {
@@ -44,11 +75,13 @@ function SettingsWorkspace() {
   const initialReminder = getReminderSettings();
   const [enabled, setEnabled] = useState(initialReminder.enabled);
   const [time, setTime] = useState(initialReminder.time);
+  const [reminderCreatedAt, setReminderCreatedAt] = useState(initialReminder.createdAt);
+  const [reminderUpdatedAt, setReminderUpdatedAt] = useState(initialReminder.updatedAt);
   const [status, setStatus] = useState("");
   const [exported, setExported] = useState("");
   const importInputRef = useRef<HTMLInputElement>(null);
   const saveReminder = async () => {
-    saveReminderSettings({
+    const savedReminder = saveReminderSettings({
       ...getReminderSettings(),
       enabled,
       time,
@@ -56,6 +89,8 @@ function SettingsWorkspace() {
         ? getReminderSettings().lastNotifiedDate
         : undefined,
     });
+    setReminderCreatedAt(savedReminder.createdAt);
+    setReminderUpdatedAt(savedReminder.updatedAt);
     if (
       enabled &&
       "Notification" in window &&
@@ -93,25 +128,9 @@ function SettingsWorkspace() {
     }
   };
   const exportData = () => {
-    const records = Object.keys(window.localStorage)
-      .filter(
-        (key) =>
-          key.startsWith("daily-space:") ||
-          key.startsWith("journal:") ||
-          key.startsWith("mood:"),
-      )
-      .reduce<Record<string, string>>((result, key) => {
-        result[key] = window.localStorage.getItem(key) ?? "";
-        return result;
-      }, {});
+    const backup = createDataBackup();
     const blob = new Blob(
-      [
-        JSON.stringify(
-          { exportedAt: new Date().toISOString(), records },
-          null,
-          2,
-        ),
-      ],
+      [serializeDataBackup(backup)],
       { type: "application/json" },
     );
     const href = URL.createObjectURL(blob);
@@ -126,36 +145,40 @@ function SettingsWorkspace() {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const backup = JSON.parse(await file.text()) as { records?: unknown };
-      if (
-        !backup.records ||
-        typeof backup.records !== "object" ||
-        Array.isArray(backup.records)
-      )
-        throw new Error("invalid backup");
-      const records = Object.entries(backup.records).filter(
-        ([key, value]) =>
-          (key.startsWith("daily-space:") ||
-            key.startsWith("journal:") ||
-            key.startsWith("mood:")) &&
-          typeof value === "string",
-      );
-      if (!records.length) throw new Error("empty backup");
-      records.forEach(([key, value]) =>
-        window.localStorage.setItem(key, value),
-      );
-      [
-        "daily-space:journals-changed",
-        "daily-space:notes-changed",
-        "daily-space:plans-changed",
-        "daily-space:success-journals-changed",
-        "daily-space:reminder-changed",
-      ].forEach((name) => window.dispatchEvent(new Event(name)));
-      setExported(
-        `已导入 ${records.length} 项本地数据，请刷新页面查看全部记录。`,
-      );
-    } catch {
-      setExported("导入失败：请选择从“日常留白”导出的备份 JSON 文件。");
+      // Some mobile file providers do not implement File.text() reliably.
+      // FileReader also handles files shared from the iOS/Android Files app.
+      const text = (await readImportFile(file)).replace(/^\uFEFF/, "").trim();
+      if (!text) throw new Error("选择的文件为空。请重新导出 JSON 备份。 ");
+      const isMarkdown =
+        /\.md(?:own)?$/i.test(file.name) ||
+        file.type === "text/markdown";
+      if (isMarkdown) {
+        const entries = parseSuccessJournalMarkdown(text);
+        if (!entries.length) throw new Error("Markdown 中没有有效的日期记录。");
+        const result = mergeSuccessJournalLines(entries);
+        await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+        setExported(
+          `成功日记 Markdown 导入完成：识别 ${entries.length} 个日期、补充 ${result.importedLines} 条，当前共有 ${listSuccessJournals().length} 个日期。`,
+        );
+      } else {
+        const candidate = JSON.parse(text) as { format?: unknown };
+        if (candidate.format === "daily-space-pending-import") {
+        const pending = parsePendingLocalImport(candidate);
+        const result = mergeSuccessJournalLines(pending.successJournals);
+        await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+        setExported(
+          `成功日记导入完成：补充 ${result.importedLines} 条，当前共有 ${listSuccessJournals().length} 个日期；已有内容没有被覆盖。`,
+        );
+        } else {
+          const result = restoreDataBackup(text, { mode: "merge" });
+          setExported(
+            `已合并 ${result.importedRecords} 项备份数据，当前已有内容没有被覆盖。请返回全景看板查看。`,
+          );
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "文件读取失败。";
+      setExported(`导入失败：${message} 请使用“导出全部本地数据”生成的 JSON 文件。`);
     } finally {
       event.target.value = "";
     }
@@ -219,6 +242,9 @@ function SettingsWorkspace() {
             发送飞书测试提醒
           </button>
         </div>
+        {reminderUpdatedAt ? (
+          <RecordTimestamp createdAt={reminderCreatedAt} updatedAt={reminderUpdatedAt} showCreatedAt className="mt-3" />
+        ) : null}
         <p className="mt-4 text-xs leading-5 text-[#718077]">
           浏览器提醒在本网站打开期间生效。飞书云端定时提醒当前仍按已部署的 21:50
           执行；时间测试会使用你当前选择的时间。
@@ -230,6 +256,8 @@ function SettingsWorkspace() {
           </p>
         ) : null}
       </section>
+      <CloudRecoveryPanel />
+      <LocalBackupPanel />
       <section className="mt-5 border border-[#dfe5df] bg-white p-6">
         <div className="flex items-center gap-2 text-[#2f6651]">
           <ShieldCheck size={19} />
@@ -249,7 +277,7 @@ function SettingsWorkspace() {
           <input
             ref={importInputRef}
             type="file"
-            accept="application/json"
+            accept=".json,.md,.markdown,application/json,text/markdown,text/plain"
             onChange={importData}
             className="hidden"
           />
@@ -258,7 +286,7 @@ function SettingsWorkspace() {
             className="inline-flex items-center gap-2 bg-[#2f6651] px-4 py-2.5 text-sm font-medium text-white"
           >
             <Upload size={16} />
-            导入本地备份
+            导入备份 / 成功日记 Markdown
           </button>
         </div>
         {exported ? (
