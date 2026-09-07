@@ -14,6 +14,33 @@ function accountKey(userId: string, suffix: "records" | "sync") {
   return `${INTERNAL_PREFIX}account:${encodeURIComponent(userId)}:${suffix}`;
 }
 
+/** Removes only rebuildable account caches; visible records are untouched. */
+export function clearAccountCaches(storage: StorageAdapter, userId: string) {
+  storage.removeItem(accountKey(userId, "records"));
+  storage.removeItem(accountKey(userId, "sync"));
+}
+
+function isQuotaError(error: unknown) {
+  return Boolean(
+    error &&
+      typeof error === "object" &&
+      "name" in error &&
+      (error.name === "QuotaExceededError" ||
+        ("code" in error && error.code === 22)),
+  );
+}
+
+function setAccountItem(storage: StorageAdapter, key: string, value: string) {
+  try {
+    storage.setItem(key, value);
+  } catch (error) {
+    if (!isQuotaError(error)) throw error;
+    // The account cache is disposable: the cloud snapshot and visible keys
+    // remain the source of truth when a mobile browser has a small quota.
+    storage.removeItem(key);
+  }
+}
+
 function parseObject(value: string | null): Record<string, unknown> {
   if (!value) return {};
   try {
@@ -44,7 +71,8 @@ export function writeAccountRecords(
   userId: string,
   records: StoredRecords,
 ) {
-  storage.setItem(
+  setAccountItem(
+    storage,
     accountKey(userId, "records"),
     JSON.stringify(sanitizeStoredRecords(records)),
   );
@@ -62,7 +90,7 @@ export function writeAccountSyncState(
   userId: string,
   state: Record<string, unknown>,
 ) {
-  storage.setItem(accountKey(userId, "sync"), JSON.stringify(state));
+  setAccountItem(storage, accountKey(userId, "sync"), JSON.stringify(state));
 }
 
 /**
@@ -79,7 +107,10 @@ export function activateAccountStorage(
   const visibleRecords = collectStoredRecords(storage);
 
   if (previousUserId === userId) {
-    writeAccountRecords(storage, userId, visibleRecords);
+    // Keep the previous account snapshot intact until RecordSynchronizer has
+    // compared it with visible records and assigned clocks to offline/imported
+    // edits. Writing here would make a just-imported value look unchanged and
+    // allow the older cloud value to overwrite it during startup.
     return visibleRecords;
   }
 
