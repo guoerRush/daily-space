@@ -22,6 +22,7 @@ import { getReminderSettings, saveReminderSettings } from "@/lib/reminder";
 import { FeishuInboxConnect } from "@/components/feishu-inbox-connect";
 import { CloudRecoveryPanel } from "@/components/cloud-recovery-panel";
 import { LocalBackupPanel } from "@/components/local-backup-panel";
+import { collectAllRecordsForExport } from "@/lib/cloud-backups";
 import {
   createDataBackup,
   restoreDataBackup,
@@ -127,8 +128,21 @@ function SettingsWorkspace() {
       setStatus("测试失败，请确认本地服务正在运行。");
     }
   };
-  const exportData = () => {
-    const backup = createDataBackup();
+  const exportData = async () => {
+    const exportedRecords = await collectAllRecordsForExport();
+    const backup = createDataBackup({
+      get length() {
+        return Object.keys(exportedRecords.records).length;
+      },
+      key(index) {
+        return Object.keys(exportedRecords.records)[index] ?? null;
+      },
+      getItem(key) {
+        return exportedRecords.records[key] ?? null;
+      },
+      setItem() {},
+      removeItem() {},
+    });
     const blob = new Blob(
       [serializeDataBackup(backup)],
       { type: "application/json" },
@@ -139,7 +153,9 @@ function SettingsWorkspace() {
     link.download = `日常留白备份-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(href);
-    setExported("备份文件已下载。");
+    setExported(
+      `已导出全部 ${Object.keys(exportedRecords.records).length} 项记录（${exportedRecords.source === "cloud-and-browser" ? "云端与本机合并" : "本机数据"}）。`,
+    );
   };
   const importData = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -268,7 +284,7 @@ function SettingsWorkspace() {
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <button
-            onClick={exportData}
+            onClick={() => void exportData()}
             className="inline-flex items-center gap-2 border border-[#2f6651] px-4 py-2.5 text-sm font-medium text-[#2f6651]"
           >
             <Download size={16} />
