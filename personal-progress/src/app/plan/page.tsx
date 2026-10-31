@@ -20,6 +20,8 @@ import {
   X,
 } from "lucide-react";
 import { AppFrame } from "@/components/app-frame";
+import { CompletionSummary } from "@/components/completion-summary";
+import { RecordTimestamp } from "@/components/record-timestamp";
 import { Button } from "@/components/ui/button";
 import {
   RichTextContent,
@@ -37,14 +39,20 @@ import {
 } from "@/components/ui/dialog";
 import Link from "next/link";
 import { listJournals, todayKey } from "@/lib/journals";
+import { cn } from "@/lib/utils";
 import {
   buildRemarkItems,
   listDailyPlans,
   remarkItemsToHtml,
+  saveDailyPlan,
   type FocusSession,
   type StoredDayPlan,
 } from "@/lib/plans";
 import { extractHighlights } from "@/lib/reflection";
+import {
+  remarkCompletionId,
+  setCompletionStatus,
+} from "@/lib/completions";
 
 type Task = { id: number; text: string; priority: number; done: boolean };
 type PlannedRow = { id: number; time: string; activity: string };
@@ -65,6 +73,8 @@ type DayPlan = {
   focusSessions: FocusSession[];
   remarkCarryoverSyncedFrom?: string;
   locked: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 const emptyPlan: DayPlan = {
   tasks: [],
@@ -77,6 +87,26 @@ const emptyPlan: DayPlan = {
   focusSessions: [],
   locked: false,
 };
+
+let planItemSequence = 0;
+
+function createPlanItemId() {
+  planItemSequence = (planItemSequence + 1) % 1_000;
+  return Date.now() * 1_000 + planItemSequence;
+}
+
+function ensureUniqueIds<T extends { id: number }>(items: T[] | undefined) {
+  const used = new Set<number>();
+  return (items ?? []).map((item) => {
+    if (Number.isSafeInteger(item.id) && !used.has(item.id)) {
+      used.add(item.id);
+      return item;
+    }
+    const id = createPlanItemId();
+    used.add(id);
+    return { ...item, id };
+  });
+}
 
 function ClientOnly({ children }: { children: ReactNode }) {
   const ready = useSyncExternalStore(
@@ -92,11 +122,19 @@ function getPlanKey(date: string) {
 }
 function getPlan(date: string): DayPlan {
   try {
-    return {
+    const storedPlan = {
       ...emptyPlan,
       ...(JSON.parse(
         window.localStorage.getItem(getPlanKey(date)) ?? "{}",
       ) as Partial<DayPlan>),
+    };
+    return {
+      ...storedPlan,
+      createdAt: storedPlan.createdAt ?? `${date}T12:00:00`,
+      updatedAt: storedPlan.updatedAt ?? storedPlan.createdAt ?? `${date}T12:00:00`,
+      tasks: ensureUniqueIds(storedPlan.tasks),
+      planned: ensureUniqueIds(storedPlan.planned),
+      actual: ensureUniqueIds(storedPlan.actual),
     };
   } catch {
     return emptyPlan;
@@ -119,16 +157,14 @@ function syncUnfinishedRemarksFromYesterday(date: string, currentPlan: DayPlan) 
   const unfinished = buildRemarkItems(yesterdayPlan.remarks, yesterdayPlan.remarkChecks).filter((item) => !item.done);
   if (!unfinished.length) {
     const next = { ...currentPlan, remarkCarryoverSyncedFrom: yesterday };
-    window.localStorage.setItem(getPlanKey(date), JSON.stringify(next));
-    return next;
+    return saveDailyPlan(date, next);
   }
 
   const todayItems = buildRemarkItems(currentPlan.remarks, currentPlan.remarkChecks);
   const additions = unfinished.filter((item) => !todayItems.some((todayItem) => todayItem.text === item.text));
   if (!additions.length) {
     const next = { ...currentPlan, remarkCarryoverSyncedFrom: yesterday };
-    window.localStorage.setItem(getPlanKey(date), JSON.stringify(next));
-    return next;
+    return saveDailyPlan(date, next);
   }
 
   const next = {
@@ -137,8 +173,7 @@ function syncUnfinishedRemarksFromYesterday(date: string, currentPlan: DayPlan) 
     remarkChecks: currentPlan.remarkChecks ?? {},
     remarkCarryoverSyncedFrom: yesterday,
   };
-  window.localStorage.setItem(getPlanKey(date), JSON.stringify(next));
-  return next;
+  return saveDailyPlan(date, next);
 }
 
 function loadPlanWithYesterdayRemarks(date: string) {
@@ -253,6 +288,15 @@ function PlanWorkspace() {
   );
   const pastPlans = listDailyPlans().filter((entry) => entry.date < date);
   const remarkItems = buildRemarkItems(plan.remarks, plan.remarkChecks);
+  const repeatedPlannedTimes = new Set(
+    plan.planned
+      .filter((row) => row.time.trim())
+      .map((row) => row.time.trim())
+      .filter(
+        (time, _index, times) =>
+          times.filter((candidate) => candidate === time).length > 1,
+      ),
+  );
   const focusTask = plan.tasks.find((task) => task.id === focusTaskId);
   const focusMinutes = plan.focusSessions.reduce(
     (total, session) => total + session.minutes,
@@ -289,9 +333,7 @@ function PlanWorkspace() {
           ...current,
           focusSessions: [...current.focusSessions, session],
         };
-        window.localStorage.setItem(getPlanKey(date), JSON.stringify(next));
-        window.dispatchEvent(new Event("daily-space:plans-changed"));
-        return next;
+        return saveDailyPlan(date, next);
       });
       setMessage(`“${focusTask.text || "这项计划"}”已完成一次 25 分钟专注。`);
       setFocusTaskId(null);
@@ -303,9 +345,7 @@ function PlanWorkspace() {
     if (locked) return;
     setPlan((current) => {
       const next = { ...current, ...patch };
-      window.localStorage.setItem(getPlanKey(date), JSON.stringify(next));
-      window.dispatchEvent(new Event("daily-space:plans-changed"));
-      return next;
+      return saveDailyPlan(date, next);
     });
   };
   const startFocus = (taskId: number) => {
@@ -325,7 +365,7 @@ function PlanWorkspace() {
       tasks: [
         ...plan.tasks,
         {
-          id: Date.now(),
+          id: createPlanItemId(),
           text: "",
           priority: plan.tasks.length + 1,
           done: false,
@@ -334,13 +374,16 @@ function PlanWorkspace() {
     });
   const addPlanned = () =>
     update({
-      planned: [...plan.planned, { id: Date.now(), time: "", activity: "" }],
+      planned: [
+        ...plan.planned,
+        { id: createPlanItemId(), time: "", activity: "" },
+      ],
     });
   const addActual = () =>
     update({
       actual: [
         ...plan.actual,
-        { id: Date.now(), time: "", activity: "", minutes: 0 },
+        { id: createPlanItemId(), time: "", activity: "", minutes: 0 },
       ],
     });
   const save = () => {
@@ -351,33 +394,156 @@ function PlanWorkspace() {
       return;
     }
     const next = { ...plan, locked: true };
-    window.localStorage.setItem(getPlanKey(date), JSON.stringify(next));
-    window.dispatchEvent(new Event("daily-space:plans-changed"));
-    setPlan(next);
+    setPlan(saveDailyPlan(date, next));
     setMessage("今日安排已保存并锁定。需要调整时点击“修改”。");
   };
   const unlock = () => {
     setPlan((current) => {
       const next = { ...current, locked: false };
-      window.localStorage.setItem(getPlanKey(date), JSON.stringify(next));
-      window.dispatchEvent(new Event("daily-space:plans-changed"));
-      return next;
+      return saveDailyPlan(date, next);
     });
     setMessage("已进入修改状态，所有更改会自动保存草稿。");
   };
   const toggleRemarkDone = (id: string) => {
     setPlan((current) => {
+      const item = buildRemarkItems(
+        current.remarks,
+        current.remarkChecks,
+      ).find((candidate) => candidate.id === id);
+      const done = !current.remarkChecks[id];
+      if (item) {
+        setCompletionStatus(
+          {
+            id: remarkCompletionId(date, item.text),
+            kind: "remark",
+            title: item.text,
+            completedDate: date,
+            sourceDate: date,
+          },
+          done,
+        );
+      }
       const next = {
         ...current,
         remarkChecks: {
           ...current.remarkChecks,
-          [id]: !current.remarkChecks[id],
+          [id]: done,
         },
       };
-      window.localStorage.setItem(getPlanKey(date), JSON.stringify(next));
-      window.dispatchEvent(new Event("daily-space:plans-changed"));
-      return next;
+      return saveDailyPlan(date, next);
     });
+  };
+  const removeCompletedRemark = (id: string) => {
+    setPlan((current) => {
+      const items = buildRemarkItems(current.remarks, current.remarkChecks);
+      const removed = items.find((item) => item.id === id);
+      if (!removed?.done) return current;
+      setCompletionStatus(
+        {
+          id: remarkCompletionId(date, removed.text),
+          kind: "remark",
+          title: removed.text,
+          completedDate: date,
+          sourceDate: date,
+        },
+        true,
+      );
+      const remaining = items.filter((item) => item.id !== id);
+      const remarkChecks = Object.fromEntries(
+        remaining
+          .map((item, index) => [`${index}:${item.text}`, item.done] as const)
+          .filter((entry) => entry[1]),
+      );
+      const next = {
+        ...current,
+        remarks: remarkItemsToHtml(remaining),
+        remarkChecks,
+      };
+      return saveDailyPlan(date, next);
+    });
+    setMessage("已从今日备注移除，并保留在完成汇总中。");
+  };
+  const changeTask = (task: Task, patch: Partial<Task>) => {
+    const nextTask = { ...task, ...patch };
+    if (nextTask.text.trim()) {
+      setCompletionStatus(
+        {
+          id: `plan-task:${date}:${task.id}`,
+          kind: "plan-task",
+          title: nextTask.text.trim(),
+          completedDate: date,
+          sourceDate: date,
+        },
+        nextTask.done,
+      );
+    }
+    update({
+      tasks: plan.tasks.map((item) =>
+        item.id === task.id ? nextTask : item,
+      ),
+    });
+  };
+  const toggleTaskDone = (task: Task) => {
+    const done = !task.done;
+    if (task.text.trim()) {
+      setCompletionStatus(
+        {
+          id: `plan-task:${date}:${task.id}`,
+          kind: "plan-task",
+          title: task.text.trim(),
+          completedDate: date,
+          sourceDate: date,
+        },
+        done,
+      );
+    }
+    setPlan((current) => {
+      const next = {
+        ...current,
+        tasks: current.tasks.map((item) =>
+          item.id === task.id ? { ...item, done } : item,
+        ),
+      };
+      return saveDailyPlan(date, next);
+    });
+  };
+  const removeTask = (task: Task) => {
+    if (task.done && task.text.trim()) {
+      setCompletionStatus(
+        {
+          id: `plan-task:${date}:${task.id}`,
+          kind: "plan-task",
+          title: task.text.trim(),
+          completedDate: date,
+          sourceDate: date,
+        },
+        true,
+      );
+    }
+    setPlan((current) => {
+      const next = {
+        ...current,
+        tasks: current.tasks.filter((item) => item.id !== task.id),
+      };
+      return saveDailyPlan(date, next);
+    });
+    if (task.done) setMessage("已移除完成待办，记录仍保留在完成汇总中。");
+  };
+  const removeActual = (row: ActualRow) => {
+    if (row.activity.trim()) {
+      setCompletionStatus(
+        {
+          id: `plan-actual:${date}:${row.id}`,
+          kind: "actual",
+          title: row.activity.trim(),
+          completedDate: date,
+          sourceDate: date,
+          detail: row.minutes ? `${row.minutes} 分钟` : undefined,
+        },
+        true,
+      );
+    }
+    update({ actual: plan.actual.filter((item) => item.id !== row.id) });
   };
   const carryUnfinishedToTomorrow = () => {
     const unfinished = plan.tasks.filter(
@@ -422,7 +588,7 @@ function PlanWorkspace() {
     const taskAdditions = unfinished
       .filter((task) => !existingTasks.has(task.text.trim()))
       .map((task, index) => ({
-        id: Date.now() + index,
+        id: createPlanItemId(),
         text: task.text,
         priority: tomorrowPlan.tasks.length + index + 1,
         done: false,
@@ -437,8 +603,8 @@ function PlanWorkspace() {
         (row) =>
           !existingBlocks.has(`${row.time.trim()}|${row.activity.trim()}`),
       )
-      .map((row, index) => ({
-        id: Date.now() + taskAdditions.length + index,
+      .map((row) => ({
+        id: createPlanItemId(),
         time: row.time,
         activity: row.activity,
       }));
@@ -450,17 +616,13 @@ function PlanWorkspace() {
       setMessage("未完成待办和未执行时间段都已在明日安排中。");
       return;
     }
-    window.localStorage.setItem(
-      getPlanKey(tomorrow),
-      JSON.stringify({
-        ...tomorrowPlan,
-        tasks: [...tomorrowPlan.tasks, ...taskAdditions],
-        planned: [...tomorrowPlan.planned, ...blockAdditions],
-        remarks: nextRemarks,
-        remarkChecks: tomorrowPlan.remarkChecks,
-      }),
-    );
-    window.dispatchEvent(new Event("daily-space:plans-changed"));
+    saveDailyPlan(tomorrow, {
+      ...tomorrowPlan,
+      tasks: [...tomorrowPlan.tasks, ...taskAdditions],
+      planned: [...tomorrowPlan.planned, ...blockAdditions],
+      remarks: nextRemarks,
+      remarkChecks: tomorrowPlan.remarkChecks,
+    });
     const details = [
       `${taskAdditions.length} 项未完成待办`,
       `${blockAdditions.length} 个未执行时间段`,
@@ -480,43 +642,54 @@ function PlanWorkspace() {
   } as CSSProperties;
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto w-full max-w-5xl">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm text-[#65736a]">每日填写 · 草稿自动保存</p>
           <h1 className="mt-1 text-2xl font-semibold md:text-3xl">今日安排</h1>
+          <RecordTimestamp
+            date={date}
+            createdAt={plan.createdAt}
+            updatedAt={plan.updatedAt}
+            className="mt-2"
+          />
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <button
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
             onClick={carryUnfinishedToTomorrow}
-            className="flex items-center gap-2 border border-[#cfd8d0] px-4 py-2.5 text-sm font-medium text-[#526158] hover:bg-[#f5f8f5]"
           >
-            <Plus size={16} />
+            <Plus data-icon="inline-start" />
             带入明天
-          </button>
+          </Button>
           {locked ? (
             <>
-              <span className="inline-flex items-center gap-2 border border-[#dfe5df] bg-white px-3 py-2.5 text-sm text-[#65736a]">
+              <span className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dfe5df] bg-white px-3 text-sm text-[#65736a] shadow-sm">
                 <Lock size={15} />
                 已保存
               </span>
-              <button
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
                 onClick={unlock}
-                className="flex items-center gap-2 border border-[#2f6651] px-4 py-2.5 text-sm font-medium text-[#2f6651]"
               >
-                <Pencil size={16} />
+                <Pencil data-icon="inline-start" />
                 修改
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <button
+              <Button
+                type="button"
+                size="lg"
                 onClick={save}
-                className="flex items-center gap-2 bg-[#2f6651] px-4 py-2.5 text-sm font-medium text-white"
               >
-                <Save size={16} />
+                <Save data-icon="inline-start" />
                 保存并锁定
-              </button>
+              </Button>
               {missingRequiredTerms.length ? (
                 <p className="w-full text-right text-xs text-[#bd6879]">
                   保存前还需加入：{missingRequiredTerms.join("、")}
@@ -528,7 +701,7 @@ function PlanWorkspace() {
       </div>
       <section
         style={divider}
-        className="mt-7 overflow-hidden border border-[#d8d8d0] bg-[#fffefb]"
+        className="mt-7 overflow-hidden rounded-lg border border-[#d8d8d0] bg-[#fffefb] shadow-sm"
       >
         <div className="flex flex-wrap items-center gap-4 border-b-2 border-[var(--plan-divider)] px-5 py-4">
           <label className="flex items-center gap-2 text-sm font-medium">
@@ -607,30 +780,24 @@ function PlanWorkspace() {
                   key={task.id}
                   task={task}
                   locked={locked}
-                  onChange={(patch) =>
-                    update({
-                      tasks: plan.tasks.map((item) =>
-                        item.id === task.id ? { ...item, ...patch } : item,
-                      ),
-                    })
-                  }
-                  onDelete={() =>
-                    update({
-                      tasks: plan.tasks.filter((item) => item.id !== task.id),
-                    })
-                  }
+                  onToggleDone={() => toggleTaskDone(task)}
+                  onChange={(patch) => changeTask(task, patch)}
+                  onDelete={() => removeTask(task)}
                   onFocus={() => startFocus(task.id)}
                 />
               ))}
           </div>
           {!locked ? (
-            <button
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
               onClick={addTask}
-              className="mt-4 inline-flex items-center gap-1 border border-[#2f6651] px-3 py-2 text-sm font-medium text-[#2f6651]"
+              className="mt-4"
             >
-              <Plus size={16} />
+              <Plus data-icon="inline-start" />
               添加一行待办
-            </button>
+            </Button>
           ) : null}
         </section>
         <div className="grid lg:grid-cols-2">
@@ -639,39 +806,52 @@ function PlanWorkspace() {
               title="（2）计划完成"
               subtitle="预测每一时间段要做什么"
             />
-            <div className="mt-4 space-y-1">
-              {plan.planned.map((row) => (
-                <PlannedLine
-                  key={row.id}
-                  row={row}
+            <div className="mt-4 flex flex-col gap-1">
+              {plan.planned.length ? (
+                plan.planned.map((row) => (
+                  <PlannedLine
+                    key={row.id}
+                    row={row}
+                    locked={locked}
+                    duplicateTime={repeatedPlannedTimes.has(row.time.trim())}
+                    onChange={(patch) =>
+                      update({
+                        planned: plan.planned.map((item) =>
+                          item.id === row.id ? { ...item, ...patch } : item,
+                        ),
+                      })
+                    }
+                    onDelete={() =>
+                      update({
+                        planned: plan.planned.filter(
+                          (item) => item.id !== row.id,
+                        ),
+                      })
+                    }
+                  />
+                ))
+              ) : (
+                <PlanEmptyState
+                  label="还没有计划时间段"
+                  actionLabel="添加第一段计划"
                   locked={locked}
-                  onChange={(patch) =>
-                    update({
-                      planned: plan.planned.map((item) =>
-                        item.id === row.id ? { ...item, ...patch } : item,
-                      ),
-                    })
-                  }
-                  onDelete={() =>
-                    update({
-                      planned: plan.planned.filter(
-                        (item) => item.id !== row.id,
-                      ),
-                    })
-                  }
+                  onAdd={addPlanned}
                 />
-              ))}
+              )}
             </div>
-            {!locked ? (
-              <button
+            {!locked && plan.planned.length ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-4"
                 onClick={addPlanned}
-                className="mt-4 inline-flex items-center gap-1 border border-[#2f6651] px-3 py-2 text-sm font-medium text-[#2f6651]"
               >
-                <Plus size={15} />
+                <Plus data-icon="inline-start" />
                 添加计划时间段
-              </button>
+              </Button>
             ) : null}
-            <div className="mt-8 border-t border-[var(--plan-divider)] pt-4 text-sm text-[#65736a]">
+            <div className="mt-5 border-t border-[var(--plan-divider)] pt-4 text-sm text-[#65736a]">
               计划时间段：
               <strong className="text-[#17221d]">
                 {plan.planned.filter((row) => row.time || row.activity).length}{" "}
@@ -684,37 +864,45 @@ function PlanWorkspace() {
               title="（3）实际完成"
               subtitle="记录执行情况与实际投入"
             />
-            <div className="mt-4 space-y-1">
-              {plan.actual.map((row) => (
-                <ActualLine
-                  key={row.id}
-                  row={row}
-                  locked={locked}
-                  onChange={(patch) =>
-                    update({
-                      actual: plan.actual.map((item) =>
-                        item.id === row.id ? { ...item, ...patch } : item,
+            <div className="mt-4 flex flex-col gap-1">
+              {plan.actual.length ? (
+                plan.actual.map((row) => (
+                  <ActualLine
+                    key={row.id}
+                    row={row}
+                    locked={locked}
+                    onChange={(patch) =>
+                      update({
+                        actual: plan.actual.map((item) =>
+                          item.id === row.id ? { ...item, ...patch } : item,
                       ),
                     })
-                  }
-                  onDelete={() =>
-                    update({
-                      actual: plan.actual.filter((item) => item.id !== row.id),
-                    })
-                  }
+                    }
+                    onDelete={() => removeActual(row)}
+                  />
+                ))
+              ) : (
+                <PlanEmptyState
+                  label="还没有实际完成记录"
+                  actionLabel="记录第一项实际完成"
+                  locked={locked}
+                  onAdd={addActual}
                 />
-              ))}
+              )}
             </div>
-            {!locked ? (
-              <button
+            {!locked && plan.actual.length ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-4"
                 onClick={addActual}
-                className="mt-4 inline-flex items-center gap-1 border border-[#2f6651] px-3 py-2 text-sm font-medium text-[#2f6651]"
               >
-                <Plus size={15} />
+                <Plus data-icon="inline-start" />
                 添加实际完成
-              </button>
+              </Button>
             ) : null}
-            <div className="mt-8 border-t border-[var(--plan-divider)] pt-4 text-sm text-[#65736a]">
+            <div className="mt-5 border-t border-[var(--plan-divider)] pt-4 text-sm text-[#65736a]">
               <p>
                 实际投入总时长：
                 <strong className="text-[#17221d]">{actualMinutes} 分钟</strong>
@@ -749,38 +937,28 @@ function PlanWorkspace() {
               </span>
             )}
           </div>
-          {remarkItems.length ? (
-            <div className="mt-3 grid gap-2 border-l-2 border-[#b9d7c0] pl-3">
-              {remarkItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => toggleRemarkDone(item.id)}
-                  aria-pressed={item.done}
-                  className="flex items-start gap-2 text-left text-sm leading-6 text-[#315944]"
-                >
-                  <span
-                    className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border ${item.done ? "border-[#2f6651] bg-[#2f6651] text-white" : "border-[#6f8978] bg-white"}`}
-                  >
-                    {item.done ? <Check size={13} /> : null}
-                  </span>
-                  <span
-                    className={item.done ? "line-through text-[#7d8d83]" : ""}
-                  >
-                    {item.text}
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <RichTextEditor
-            value={plan.remarks}
-            onChange={(remarks) => update({ remarks })}
-            editable={!locked}
-            placeholder="例如：下午会议延长，阅读顺延。复盘：今天最满意的是……"
-            className="mt-4"
-            minHeightClassName="min-h-28"
-          />
+          {locked ? (
+            remarkItems.length ? (
+              <RemarkChecklist
+                items={remarkItems}
+                onToggle={toggleRemarkDone}
+                onRemove={removeCompletedRemark}
+              />
+            ) : (
+              <p className="mt-4 border border-dashed border-[#d5e2d4] bg-[#f8fcf7] px-3 py-4 text-sm text-[#718077]">
+                还没有备注内容。点击“修改备注”后可以补充。
+              </p>
+            )
+          ) : (
+            <RichTextEditor
+              value={plan.remarks}
+              onChange={(remarks) => update({ remarks })}
+              editable
+              placeholder="例如：下午会议延长，阅读顺延。复盘：今天最满意的是……"
+              className="mt-4"
+              minHeightClassName="min-h-28"
+            />
+          )}
           <div className="mt-6">
             <ColumnTitle
               title="英语听写"
@@ -800,7 +978,9 @@ function PlanWorkspace() {
             total={pastPlans.length}
             expanded={showAllPastPlans}
             onToggle={() => setShowAllPastPlans((current) => !current)}
+            onEdit={changeDate}
           />
+          <CompletionSummary />
         </section>
       </section>
       {showEveningSummary ? (
@@ -850,16 +1030,91 @@ function ColumnTitle({ title, subtitle }: { title: string; subtitle: string }) {
     </div>
   );
 }
+
+function PlanEmptyState({
+  label,
+  actionLabel,
+  locked,
+  onAdd,
+}: {
+  label: string;
+  actionLabel: string;
+  locked: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <div className="flex min-h-28 flex-col items-start justify-center gap-3 border border-dashed border-[#d5e2d4] bg-[#f8fcf7] px-4 py-5">
+      <p className="text-sm text-[#718077]">
+        {locked ? `${label}，点击“修改”后补充。` : label}
+      </p>
+      {!locked ? (
+        <Button type="button" variant="outline" size="sm" onClick={onAdd}>
+          <Plus data-icon="inline-start" />
+          {actionLabel}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function RemarkChecklist({
+  items,
+  onToggle,
+  onRemove,
+}: {
+  items: Array<{ id: string; text: string; done: boolean }>;
+  onToggle: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="mt-4 flex flex-col gap-2 border-l-2 border-[#b9d7c0] pl-3">
+      {items.map((item) => (
+        <div key={item.id} className="flex items-start gap-2">
+          <button
+            type="button"
+            onClick={() => onToggle(item.id)}
+            aria-pressed={item.done}
+            className="flex min-w-0 flex-1 items-start gap-2 text-left text-sm leading-6 text-[#315944]"
+          >
+            <span
+              className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border ${item.done ? "border-[#2f6651] bg-[#2f6651] text-white" : "border-[#6f8978] bg-white"}`}
+            >
+              {item.done ? <Check size={13} /> : null}
+            </span>
+            <span className={item.done ? "line-through text-[#7d8d83]" : ""}>
+              {item.text}
+            </span>
+          </button>
+          {item.done ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onRemove(item.id)}
+              aria-label={`移除已完成备注：${item.text}`}
+              title="移除并保留到完成汇总"
+            >
+              <X />
+            </Button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PastPlans({
   entries,
   total,
   expanded,
   onToggle,
+  onEdit,
 }: {
   entries: Array<{ date: string; plan: StoredDayPlan }>;
   total: number;
   expanded: boolean;
   onToggle: () => void;
+  onEdit: (date: string) => void;
 }) {
   if (!total)
     return (
@@ -896,13 +1151,13 @@ function PastPlans({
       </div>
       <div className="mt-4 flex flex-col gap-3">
         {entries.map(({ date: pastDate, plan: pastPlan }) => (
-          <PastPlanRow key={pastDate} date={pastDate} plan={pastPlan} />
+          <PastPlanRow key={pastDate} date={pastDate} plan={pastPlan} onEdit={() => onEdit(pastDate)} />
         ))}
       </div>
     </section>
   );
 }
-function PastPlanRow({ date, plan }: { date: string; plan: StoredDayPlan }) {
+function PastPlanRow({ date, plan, onEdit }: { date: string; plan: StoredDayPlan; onEdit: () => void }) {
   const tasks = (plan.tasks ?? [])
     .filter((task) => task.text.trim())
     .sort((a, b) => a.priority - b.priority);
@@ -920,10 +1175,22 @@ function PastPlanRow({ date, plan }: { date: string; plan: StoredDayPlan }) {
             weekday: "short",
           })}
         </p>
-        <span className="text-xs text-[#718077]">
-          待办完成 {tasks.filter((task) => task.done).length}/{tasks.length}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-[#718077]">
+            待办完成 {tasks.filter((task) => task.done).length}/{tasks.length}
+          </span>
+          <Button variant="ghost" size="sm" onClick={onEdit}>
+            <Pencil data-icon="inline-start" />
+            修改
+          </Button>
+        </div>
       </div>
+      <RecordTimestamp
+        date={date}
+        createdAt={plan.createdAt}
+        updatedAt={plan.updatedAt}
+        className="mt-1"
+      />
       {tasks.length ? (
         <p className="mt-2 text-sm leading-6 text-[#526158]">
           待办：
@@ -1002,12 +1269,14 @@ function duration(range: string) {
 function TaskLine({
   task,
   locked,
+  onToggleDone,
   onChange,
   onDelete,
   onFocus,
 }: {
   task: Task;
   locked: boolean;
+  onToggleDone: () => void;
   onChange: (patch: Partial<Task>) => void;
   onDelete: () => void;
   onFocus: () => void;
@@ -1015,8 +1284,8 @@ function TaskLine({
   return (
     <div className="flex items-center gap-2 border-b border-dashed border-[#d8ded8] py-2">
       <button
-        disabled={locked}
-        onClick={() => onChange({ done: !task.done })}
+        onClick={onToggleDone}
+        aria-label={`${task.done ? "取消完成" : "完成"}待办：${task.text || "未命名待办"}`}
         className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${task.done ? "border-[#2f6651] bg-[#2f6651] text-white" : "border-[#718077]"}`}
       >
         {task.done ? <Check size={13} /> : null}
@@ -1048,10 +1317,11 @@ function TaskLine({
         <Timer data-icon="inline-start" />
         专注
       </Button>
-      {!locked ? (
+      {!locked || task.done ? (
         <button
           onClick={onDelete}
-          aria-label="删除待办"
+          aria-label={task.done ? "移除已完成待办" : "删除待办"}
+          title={task.done ? "移除并保留到完成汇总" : "删除待办"}
           className="text-[#a0aaa2] hover:text-[#bd6879]"
         >
           <X size={15} />
@@ -1109,28 +1379,40 @@ function FocusDialog({
 function PlannedLine({
   row,
   locked,
+  duplicateTime,
   onChange,
   onDelete,
 }: {
   row: PlannedRow;
   locked: boolean;
+  duplicateTime: boolean;
   onChange: (patch: Partial<PlannedRow>) => void;
   onDelete: () => void;
 }) {
   const timeLength = duration(row.time);
   return (
-    <div className="grid grid-cols-[120px_minmax(0,1fr)_24px] items-center gap-2 border-b border-dashed border-[#d8ded8] py-2">
+    <div
+      className={cn(
+        "grid grid-cols-[120px_minmax(0,1fr)_24px] items-center gap-2 border-b border-dashed border-[#d8ded8] py-2",
+        duplicateTime && "bg-[#fffaf0]",
+      )}
+    >
       <div>
         <input
           readOnly={locked}
           value={row.time}
           onChange={(event) => onChange({ time: event.target.value })}
-          placeholder="5:40-7:00"
+          placeholder="填写时段"
+          aria-invalid={duplicateTime || undefined}
+          title={duplicateTime ? "该时段与其他计划重复" : undefined}
           className="w-full bg-transparent text-sm font-medium outline-none placeholder:text-[#a0aaa2]"
         />
-        {timeLength ? (
-          <span className="text-[11px] text-[#5d8467]">{timeLength}</span>
-        ) : null}
+        <div className="flex items-center gap-1 text-[11px]">
+          {timeLength ? (
+            <span className="text-[#5d8467]">{timeLength}</span>
+          ) : null}
+          {duplicateTime ? <span className="text-[#aa7a31]">时段重复</span> : null}
+        </div>
       </div>
       <input
         readOnly={locked}
@@ -1170,7 +1452,7 @@ function ActualLine({
           readOnly={locked}
           value={row.time}
           onChange={(event) => onChange({ time: event.target.value })}
-          placeholder="7:00-7:40"
+          placeholder="填写时段"
           className="w-full bg-transparent text-sm font-medium outline-none placeholder:text-[#a0aaa2]"
         />
         {timeLength ? (

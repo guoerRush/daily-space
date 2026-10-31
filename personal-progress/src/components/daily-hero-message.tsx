@@ -38,8 +38,8 @@ export function DailyHeroMessage() {
 
   return (
     <>
-      <h1 className="mt-2 text-3xl font-semibold leading-tight text-[#284b37] md:text-[2.5rem]">{message.title}</h1>
-      <p className="mt-3 text-sm leading-6 text-[#5c7364]">{message.description}</p>
+      <h1 className="mt-2 text-3xl font-bold leading-tight text-foreground md:text-[2.5rem]">{message.title}</h1>
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">{message.description}</p>
       <div className="clarity-art" role="note" tabIndex={0} aria-label="清晰提醒" aria-describedby="clarity-tip">
         <span id="clarity-tip" className="clarity-tip" role="tooltip">
           <span>1. 当你计划很多或脑子很乱时，请在随记中写下你的安排。</span>

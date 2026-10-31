@@ -2,6 +2,8 @@ export type ReminderSettings = {
   enabled: boolean;
   time: string;
   lastNotifiedDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 export type FeishuReminder = {
   id: string;
@@ -13,6 +15,8 @@ export type FeishuReminder = {
   minAction?: string;
   sceneTag?: "清晨激活" | "午间充电" | "晚间反思";
   lastNotifiedDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export const REMINDER_STORAGE_KEY = STORAGE_KEYS.reminderSettings;
@@ -36,8 +40,16 @@ export function getReminderSettings(): ReminderSettings {
 }
 
 export function saveReminderSettings(settings: ReminderSettings) {
-  window.localStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify(settings));
+  const existing = getReminderSettings();
+  const now = new Date().toISOString();
+  const next = {
+    ...settings,
+    createdAt: settings.createdAt ?? existing.createdAt ?? now,
+    updatedAt: now,
+  };
+  window.localStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify(next));
   window.dispatchEvent(new Event(STORAGE_EVENTS.reminderChanged));
+  return next;
 }
 
 export function getFeishuReminders(): FeishuReminder[] {
@@ -59,10 +71,33 @@ export function getFeishuReminders(): FeishuReminder[] {
 }
 
 export function saveFeishuReminders(reminders: FeishuReminder[]) {
+  const previous = new Map(getFeishuReminders().map((item) => [item.id, item]));
+  const now = new Date().toISOString();
+  const stamped = reminders.map((item) => {
+    const existing = previous.get(item.id);
+    const numericId = Number(item.id);
+    const idCreatedAt = Number.isFinite(numericId) && numericId >= 946_684_800_000
+      ? new Date(numericId).toISOString()
+      : now;
+    const createdAt = item.createdAt ?? existing?.createdAt ?? idCreatedAt;
+    const comparable = (reminder: FeishuReminder) => {
+      const value = { ...reminder };
+      delete value.createdAt;
+      delete value.updatedAt;
+      return value;
+    };
+    const changed = !existing || JSON.stringify(comparable(existing)) !== JSON.stringify(comparable(item));
+    return {
+      ...item,
+      createdAt,
+      updatedAt: changed ? now : item.updatedAt ?? existing?.updatedAt ?? createdAt,
+    };
+  });
   window.localStorage.setItem(
     STORAGE_KEYS.feishuReminders,
-    JSON.stringify(reminders),
+    JSON.stringify(stamped),
   );
   window.dispatchEvent(new Event(STORAGE_EVENTS.feishuRemindersChanged));
+  return stamped;
 }
 import { STORAGE_EVENTS, STORAGE_KEYS } from "@/lib/storage-contract";

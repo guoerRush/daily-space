@@ -10,8 +10,10 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { ArrowLeft, ImagePlus, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowLeft, ImagePlus, Maximize2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { AppFrame } from "@/components/app-frame";
+import { ImageLightbox } from "@/components/image-lightbox";
+import { RecordTimestamp } from "@/components/record-timestamp";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +51,7 @@ import {
 } from "@/lib/notes";
 import { addHabit } from "@/lib/habits";
 import { todayKey } from "@/lib/journals";
+import { saveDailyPlan } from "@/lib/plans";
 
 function ClientOnly({ children }: { children: ReactNode }) {
   const ready = useSyncExternalStore(
@@ -99,6 +102,7 @@ function NotesEditor({ category }: { category: NoteCategory }) {
   const [images, setImages] = useState<string[]>([]);
   const [tags, setTags] = useState<NoteTag[]>([]);
   const [draftId, setDraftId] = useState<number>();
+  const [editingNoteId, setEditingNoteId] = useState<number>();
   const [message, setMessage] = useState("");
   const [autoSavedAt, setAutoSavedAt] = useState("");
   const [query, setQuery] = useState("");
@@ -190,8 +194,35 @@ function NotesEditor({ category }: { category: NoteCategory }) {
     setImages([]);
     setTags([]);
     setDraftId(undefined);
+    setEditingNoteId(undefined);
     lastSavedRef.current = "";
     setMessage("随记已保存。");
+  };
+  const editNote = (note: Note) => {
+    setTitle(note.title);
+    setContent(note.content);
+    setImages(note.images);
+    setTags(note.tags ?? []);
+    setDraftId(note.id);
+    setEditingNoteId(note.id);
+    lastSavedRef.current = JSON.stringify({
+      title: note.title,
+      content: note.content,
+      images: note.images,
+      tags: note.tags ?? [],
+    });
+    setMessage(`正在修改“${note.title}”。`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const cancelEdit = () => {
+    setTitle("");
+    setContent("");
+    setImages([]);
+    setTags([]);
+    setDraftId(undefined);
+    setEditingNoteId(undefined);
+    lastSavedRef.current = "";
+    setMessage("已取消修改。");
   };
   const convertNote = (note: Note, target: "plan" | "goal" | "habit") => {
     const label =
@@ -207,11 +238,12 @@ function NotesEditor({ category }: { category: NoteCategory }) {
       const goals = JSON.parse(
         window.localStorage.getItem("daily-space:goals") ?? "[]",
       ) as Array<Record<string, unknown>>;
+      const now = new Date().toISOString();
       window.localStorage.setItem(
         "daily-space:goals",
         JSON.stringify([
           ...goals,
-          { id: nextLocalId(), label, done: false, type: "short", tasks: [] },
+          { id: nextLocalId(), label, done: false, type: "short", tasks: [], createdAt: now, updatedAt: now },
         ]),
       );
       window.dispatchEvent(new Event("daily-space:goals-changed"));
@@ -228,22 +260,18 @@ function NotesEditor({ category }: { category: NoteCategory }) {
       }>;
     };
     const tasks = plan.tasks ?? [];
-    window.localStorage.setItem(
-      key,
-      JSON.stringify({
-        ...plan,
-        tasks: [
-          ...tasks,
-          {
-            id: nextLocalId(),
-            text: label,
-            priority: tasks.length + 1,
-            done: false,
-          },
-        ],
-      }),
-    );
-    window.dispatchEvent(new Event("daily-space:plans-changed"));
+    saveDailyPlan(todayKey(), {
+      ...plan,
+      tasks: [
+        ...tasks,
+        {
+          id: nextLocalId(),
+          text: label,
+          priority: tasks.length + 1,
+          done: false,
+        },
+      ],
+    });
     setMessage("已转为今日计划待办。");
   };
   const confirmDelete = () => {
@@ -268,10 +296,10 @@ function NotesEditor({ category }: { category: NoteCategory }) {
         <CardHeader>
           <div className="flex items-center gap-2 text-primary">
             <Plus size={18} strokeWidth={1.8} />
-            <CardTitle>添加信息</CardTitle>
+            <CardTitle>{editingNoteId ? "修改随记" : "添加信息"}</CardTitle>
           </div>
           <CardDescription>
-            留下一条灵感、方法、链接或生活经验。
+            {editingNoteId ? "修改后保存会保留原记录，并更新修改时间。" : "留下一条灵感、方法、链接或生活经验。"}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -320,9 +348,10 @@ function NotesEditor({ category }: { category: NoteCategory }) {
               添加图片
             </Button>
             <Button onClick={save}>
-              <Plus data-icon="inline-start" />
-              保存随记
+              {editingNoteId ? <Pencil data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
+              {editingNoteId ? "保存修改" : "保存随记"}
             </Button>
+            {editingNoteId ? <Button variant="ghost" onClick={cancelEdit}>取消修改</Button> : null}
             {message ? <Badge variant="secondary">{message}</Badge> : null}
             {autoSavedAt ? (
               <Badge variant="outline">已于 {autoSavedAt} 自动保存</Badge>
@@ -335,12 +364,27 @@ function NotesEditor({ category }: { category: NoteCategory }) {
                   key={image}
                   className="relative aspect-square overflow-hidden rounded-lg border border-border"
                 >
-                  <Image
+                  <ImageLightbox
                     src={image}
                     alt={`随记图片 ${index + 1}`}
-                    fill
-                    unoptimized
-                    className="object-cover"
+                    renderTrigger={(openPreview) => (
+                      <button
+                        type="button"
+                        onClick={openPreview}
+                        aria-label={`放大查看随记图片 ${index + 1}`}
+                        className="group absolute inset-0 cursor-zoom-in"
+                      >
+                        <Image
+                          src={image}
+                          alt={`随记图片 ${index + 1}`}
+                          fill
+                          unoptimized
+                          sizes="(min-width: 640px) 33vw, 50vw"
+                          className="object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                        />
+                        <Maximize2 className="absolute bottom-2 left-2 rounded-md bg-black/55 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+                      </button>
+                    )}
                   />
                   <Button
                     variant="secondary"
@@ -403,11 +447,14 @@ function NotesEditor({ category }: { category: NoteCategory }) {
                     <div className="min-w-0">
                       <CardTitle className="truncate">{note.title}</CardTitle>
                       <CardDescription className="mt-1">
-                        {new Date(note.updatedAt).toLocaleDateString("zh-CN")}
-                        {note.images.length
-                          ? ` · ${note.images.length} 张图片`
-                          : ""}
+                        {note.images.length ? `${note.images.length} 张图片` : "文字随记"}
                       </CardDescription>
+                      <RecordTimestamp
+                        id={note.id}
+                        createdAt={note.createdAt}
+                        updatedAt={note.updatedAt}
+                        className="mt-1"
+                      />
                       {note.tags?.length ? (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {note.tags.map((tag) => (
@@ -418,14 +465,19 @@ function NotesEditor({ category }: { category: NoteCategory }) {
                         </div>
                       ) : null}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setPendingDelete(note)}
-                      aria-label={`删除${note.title}`}
-                    >
-                      <Trash2 />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon-sm" onClick={() => editNote(note)} aria-label={`修改${note.title}`}>
+                        <Pencil />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => setPendingDelete(note)}
+                        aria-label={`删除${note.title}`}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 {note.content || note.images.length ? (
@@ -443,12 +495,27 @@ function NotesEditor({ category }: { category: NoteCategory }) {
                             key={image}
                             className="relative aspect-square overflow-hidden rounded-md"
                           >
-                            <Image
+                            <ImageLightbox
                               src={image}
                               alt={`${note.title} 图片 ${index + 1}`}
-                              fill
-                              unoptimized
-                              className="object-cover"
+                              renderTrigger={(openPreview) => (
+                                <button
+                                  type="button"
+                                  onClick={openPreview}
+                                  aria-label={`放大查看${note.title}的第 ${index + 1} 张图片`}
+                                  className="group absolute inset-0 cursor-zoom-in"
+                                >
+                                  <Image
+                                    src={image}
+                                    alt={`${note.title} 图片 ${index + 1}`}
+                                    fill
+                                    unoptimized
+                                    sizes="(min-width: 768px) 25vw, 33vw"
+                                    className="object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                                  />
+                                  <Maximize2 className="absolute bottom-2 left-2 rounded-md bg-black/55 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+                                </button>
+                              )}
                             />
                           </div>
                         ))}

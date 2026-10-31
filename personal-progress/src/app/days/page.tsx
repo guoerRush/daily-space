@@ -1,16 +1,12 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { CalendarHeart, Gift, ImagePlus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { CalendarHeart, Gift, ImagePlus, Maximize2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AppFrame } from "@/components/app-frame";
+import { ImageLightbox } from "@/components/image-lightbox";
+import { RecordTimestamp } from "@/components/record-timestamp";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,7 +23,6 @@ import {
   countdown,
   deleteSpecialDay,
   getSpecialDayType,
-  importBirthdayPresets,
   listSpecialDays,
   listSpecialDayTypes,
   saveSpecialDay,
@@ -80,6 +75,7 @@ function DaysWorkspace() {
   const [date, setDate] = useState("");
   const [repeatsYearly, setRepeatsYearly] = useState(false);
   const [type, setType] = useState("ordinary");
+  const [filterType, setFilterType] = useState("all");
   const [newTypeName, setNewTypeName] = useState("");
   const [typeMessage, setTypeMessage] = useState("");
   const [diaryQuery, setDiaryQuery] = useState("");
@@ -88,14 +84,28 @@ function DaysWorkspace() {
   const [backgroundImage, setBackgroundImage] = useState("");
   const [imageMessage, setImageMessage] = useState("");
   const [editingDay, setEditingDay] = useState<SpecialDay | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editRepeatsYearly, setEditRepeatsYearly] = useState(false);
+  const [editLinkedDiaryId, setEditLinkedDiaryId] = useState("");
   const [editNote, setEditNote] = useState("");
   const [editType, setEditType] = useState("ordinary");
   const [editBackgroundImage, setEditBackgroundImage] = useState("");
-  const [birthdayImportMessage, setBirthdayImportMessage] = useState("");
-  const automaticBirthdayImportHandled = useRef(false);
   const diaries = listJournals()
     .filter((entry) => `${entry.date} ${entry.content}`.includes(diaryQuery))
     .slice(0, 6);
+  const visibleDays = filterType === "all"
+    ? days
+    : days.filter(
+        (day) => getSpecialDayType(day.type, day.category).id === filterType,
+      );
+  const now = new Date();
+  const filteredDays = [...visibleDays].sort((left, right) => {
+    const distance = Math.abs(countdown(left, now)) - Math.abs(countdown(right, now));
+    if (distance !== 0) return distance;
+    const dateOrder = left.date.localeCompare(right.date);
+    return dateOrder !== 0 ? dateOrder : left.title.localeCompare(right.title, "zh-CN");
+  });
   const addDay = () => {
     if (!title.trim() || !date) return;
     const selectedType = getSpecialDayType(type);
@@ -134,16 +144,24 @@ function DaysWorkspace() {
   };
   const openEditDay = (day: SpecialDay) => {
     setEditingDay(day);
+    setEditTitle(day.title);
+    setEditDate(day.date);
+    setEditRepeatsYearly(day.repeatsYearly);
+    setEditLinkedDiaryId(day.linkedDiaryId ?? "");
     setEditNote(day.note ?? "");
     setEditType(getSpecialDayType(day.type, day.category).id);
     setEditBackgroundImage(day.backgroundImage ?? "");
     setImageMessage("");
   };
   const saveDayEdits = () => {
-    if (!editingDay) return;
+    if (!editingDay || !editTitle.trim() || !editDate) return;
     const selectedType = getSpecialDayType(editType, editingDay.category);
     updateSpecialDay({
       ...editingDay,
+      title: editTitle.trim(),
+      date: editDate,
+      repeatsYearly: editRepeatsYearly,
+      linkedDiaryId: editLinkedDiaryId || undefined,
       type: editType,
       category: selectedType.category,
       note: editNote.trim() || undefined,
@@ -171,27 +189,6 @@ function DaysWorkspace() {
     setNewTypeName("");
     setTypeMessage(`已添加“${created.label}”，三个类型列表已同步。`);
   };
-  const importBirthdays = () => {
-    const imported = importBirthdayPresets();
-    setDays(listSpecialDays());
-    setBirthdayImportMessage(
-      imported
-        ? `已添加 ${imported} 位生日，并设置为每年重复提醒。`
-        : "这份生日清单已经全部在倒计时中，无需重复添加。",
-    );
-  };
-
-  useEffect(() => {
-    if (
-      automaticBirthdayImportHandled.current ||
-      new URLSearchParams(window.location.search).get("import") !== "birthdays"
-    ) {
-      return;
-    }
-    automaticBirthdayImportHandled.current = true;
-    importBirthdays();
-  }, []);
-
   return (
     <div className="mx-auto max-w-5xl">
       <div>
@@ -202,17 +199,6 @@ function DaysWorkspace() {
         <div className="flex items-center gap-2 text-[#2f6651]">
           <CalendarHeart size={19} />
           <h2 className="font-semibold">添加倒计时</h2>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <Button type="button" variant="outline" size="sm" onClick={importBirthdays}>
-            <Gift data-icon="inline-start" />
-            导入生日清单（11位）
-          </Button>
-          {birthdayImportMessage ? (
-            <p role="status" className="text-sm text-[#2f6651]">
-              {birthdayImportMessage}
-            </p>
-          ) : null}
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_150px_140px_auto]">
           <input
@@ -289,34 +275,58 @@ function DaysWorkspace() {
               ) : null}
             </div>
             {backgroundImage ? (
-              <div className="relative mt-3 aspect-[16/7] w-full overflow-hidden rounded-lg border border-border">
-                <Image
-                  src={backgroundImage}
-                  alt="新纪念日背景预览"
-                  fill
-                  unoptimized
-                  sizes="(min-width: 768px) 50vw, 100vw"
-                  className="object-cover"
-                />
-              </div>
+              <ImageLightbox
+                src={backgroundImage}
+                alt="新纪念日背景预览"
+                renderTrigger={(openPreview) => (
+                  <button
+                    type="button"
+                    onClick={openPreview}
+                    aria-label="放大查看新纪念日背景预览"
+                    className="relative mt-3 block aspect-[16/7] w-full cursor-zoom-in overflow-hidden rounded-lg border border-border"
+                  >
+                    <Image
+                      src={backgroundImage}
+                      alt="新纪念日背景预览"
+                      fill
+                      unoptimized
+                      sizes="(min-width: 768px) 50vw, 100vw"
+                      className="object-cover"
+                    />
+                  </button>
+                )}
+              />
             ) : null}
           </div>
         </div>
         {imageMessage ? <p role="status" className="mt-3 text-sm text-destructive">{imageMessage}</p> : null}
         <div className="mt-4 grid gap-3 border-t border-[#edf1ed] pt-4 md:grid-cols-2">
-          <label className="text-sm text-[#526158]">
-            纪念日类型
+          <div className="text-sm text-[#526158]">
+            <label htmlFor="special-day-type-filter">筛选已创建的日子</label>
             <select
-              value={type}
-              onChange={(event) => setType(event.target.value)}
+              id="special-day-type-filter"
+              value={filterType}
+              onChange={(event) => setFilterType(event.target.value)}
               className="mt-2 block w-full border border-[#cfd8d0] bg-white px-3 py-2 text-sm"
             >
+              <option value="all">全部类型（{days.length}）</option>
               {dayTypes.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.label}
+                  {item.label}（
+                  {
+                    days.filter(
+                      (day) =>
+                        getSpecialDayType(day.type, day.category).id === item.id,
+                    ).length
+                  }
+                  ）
                 </option>
               ))}
             </select>
+            <p className="mt-2 text-xs text-[#718077]">
+              当前显示 {filteredDays.length} / {days.length} 个已创建日子
+            </p>
+            <p className="mt-4 font-medium text-[#526158]">自定义纪念日类型</p>
             <div className="mt-2 flex gap-2">
               <input
                 value={newTypeName}
@@ -336,7 +346,7 @@ function DaysWorkspace() {
                 {typeMessage}
               </p>
             ) : null}
-          </label>
+          </div>
           <div>
             <label className="text-sm text-[#526158]">
               关联一篇日记（可选）
@@ -372,7 +382,7 @@ function DaysWorkspace() {
         </div>
       </section>
       <section className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {days.map((day) => {
+        {filteredDays.map((day) => {
           const remaining = countdown(day);
           return (
             <article
@@ -402,6 +412,25 @@ function DaysWorkspace() {
                   {getSpecialDayType(day.type, day.category).label}
                 </span>
                 <div className="flex items-center gap-1">
+                  {day.backgroundImage ? (
+                    <ImageLightbox
+                      src={day.backgroundImage}
+                      alt={`${day.title}的背景图片`}
+                      renderTrigger={(openPreview) => (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={openPreview}
+                          aria-label={`放大查看${day.title}的背景图片`}
+                          title="放大查看背景图片"
+                          className="text-white hover:bg-white/15 hover:text-white"
+                        >
+                          <Maximize2 />
+                        </Button>
+                      )}
+                    />
+                  ) : null}
                   <Button variant="ghost" size="icon" onClick={() => openEditDay(day)} aria-label={`编辑${day.title}`} title="编辑" className={day.backgroundImage ? "text-white hover:bg-white/15 hover:text-white" : "text-[#6f7d74]"}>
                     <Pencil />
                   </Button>
@@ -422,6 +451,13 @@ function DaysWorkspace() {
                   ? ` · ${new Date(`${day.date}T12:00:00`).toLocaleDateString("zh-CN", { month: "long", day: "numeric" })}`
                   : ""}
               </p>
+              <RecordTimestamp
+                date={day.date}
+                id={day.id}
+                createdAt={day.createdAt}
+                updatedAt={day.updatedAt}
+                className={day.backgroundImage ? "mt-2 text-white/70" : "mt-2"}
+              />
               {day.note ? <p className={cn("mt-3 text-sm leading-6", day.backgroundImage ? "text-white/90" : "text-[#526158]")}>{day.note}</p> : null}
               {day.linkedDiaryId ? (
                 <Link
@@ -439,14 +475,32 @@ function DaysWorkspace() {
           <div className="col-span-full border border-dashed border-[#cfd8d0] px-5 py-16 text-center text-sm text-[#718077]">
             添加一个重要日子，在这里查看倒计时。
           </div>
+        ) : !filteredDays.length ? (
+          <div className="col-span-full border border-dashed border-[#cfd8d0] px-5 py-16 text-center text-sm text-[#718077]">
+            当前类型还没有已创建的日子，请切换为“全部类型”或新增一条。
+          </div>
         ) : null}
       </section>
       <Dialog open={Boolean(editingDay)} onOpenChange={(open) => !open && setEditingDay(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>编辑纪念日备注</DialogTitle>
-            <DialogDescription>修改备注，或更换这张纪念日卡片的背景图片。</DialogDescription>
+            <DialogTitle>修改纪念日</DialogTitle>
+            <DialogDescription>日期、名称、类型、备注和背景图片都可以修改。</DialogDescription>
           </DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium text-foreground">
+              名称
+              <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} className="mt-2 block w-full border border-input bg-card px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm font-medium text-foreground">
+              日期
+              <input type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} className="mt-2 block w-full border border-input bg-card px-3 py-2 text-sm" />
+            </label>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input type="checkbox" checked={editRepeatsYearly} onChange={(event) => setEditRepeatsYearly(event.target.checked)} />
+            每年重复提醒
+          </label>
           <label className="text-sm font-medium text-foreground">
             纪念日类型
             <select value={editType} onChange={(event) => setEditType(event.target.value)} className="mt-2 block w-full border border-input bg-card px-3 py-2 text-sm outline-none focus:border-ring">
@@ -461,6 +515,24 @@ function DaysWorkspace() {
             备注
             <Textarea value={editNote} onChange={(event) => setEditNote(event.target.value)} placeholder="写下这一天对你的意义" className="mt-2 min-h-28 resize-y" />
           </label>
+          <label className="text-sm font-medium text-foreground">
+            关联日记
+            <select value={editLinkedDiaryId} onChange={(event) => setEditLinkedDiaryId(event.target.value)} className="mt-2 block w-full border border-input bg-card px-3 py-2 text-sm">
+              <option value="">不关联日记</option>
+              {listJournals().map((entry) => (
+                <option key={entry.date} value={entry.date}>{entry.date}</option>
+              ))}
+            </select>
+          </label>
+          {editingDay ? (
+            <RecordTimestamp
+              date={editingDay.date}
+              id={editingDay.id}
+              createdAt={editingDay.createdAt}
+              updatedAt={editingDay.updatedAt}
+              showCreatedAt
+            />
+          ) : null}
           <div>
             <p className="text-sm font-medium text-foreground">背景图片</p>
             <input id="edit-day-background" type="file" accept="image/*" className="sr-only" onChange={(event) => void selectBackgroundImage(event.target.files, setEditBackgroundImage)} />
@@ -475,22 +547,33 @@ function DaysWorkspace() {
               </Button> : null}
             </div>
             {editBackgroundImage ? (
-              <div className="relative mt-3 aspect-[16/8] w-full overflow-hidden rounded-lg border border-border">
-                <Image
-                  src={editBackgroundImage}
-                  alt={`${editingDay?.title ?? "纪念日"}背景预览`}
-                  fill
-                  unoptimized
-                  sizes="(min-width: 768px) 42rem, 100vw"
-                  className="object-cover"
-                />
-              </div>
+              <ImageLightbox
+                src={editBackgroundImage}
+                alt={`${editingDay?.title ?? "纪念日"}背景预览`}
+                renderTrigger={(openPreview) => (
+                  <button
+                    type="button"
+                    onClick={openPreview}
+                    aria-label={`放大查看${editingDay?.title ?? "纪念日"}背景预览`}
+                    className="relative mt-3 block aspect-[16/8] w-full cursor-zoom-in overflow-hidden rounded-lg border border-border"
+                  >
+                    <Image
+                      src={editBackgroundImage}
+                      alt={`${editingDay?.title ?? "纪念日"}背景预览`}
+                      fill
+                      unoptimized
+                      sizes="(min-width: 768px) 42rem, 100vw"
+                      className="object-cover"
+                    />
+                  </button>
+                )}
+              />
             ) : null}
             {imageMessage ? <p role="status" className="mt-2 text-sm text-destructive">{imageMessage}</p> : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingDay(null)}>取消</Button>
-            <Button onClick={saveDayEdits}>保存修改</Button>
+            <Button onClick={saveDayEdits} disabled={!editTitle.trim() || !editDate}>保存修改</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -7,6 +7,7 @@ export type Habit = {
   createdAt: string;
   completedDates: string[];
   target?: string;
+  updatedAt?: string;
 };
 
 const starterHabits: Habit[] = [
@@ -30,11 +31,13 @@ function writeHabits(habits: Habit[]) {
 }
 
 export function addHabit(name: string, target?: string) {
+  const now = new Date().toISOString();
   const next = {
     id: Date.now(),
     name,
     target,
-    createdAt: todayKey(),
+    createdAt: now,
+    updatedAt: now,
     completedDates: [],
   };
   writeHabits([...listHabits(), next]);
@@ -43,11 +46,13 @@ export function addHabit(name: string, target?: string) {
 
 export function addHabits(habits: Array<{ name: string; target?: string }>) {
   const now = Date.now();
+  const timestamp = new Date(now).toISOString();
   const next = habits.map((habit, index) => ({
     id: now + index,
     name: habit.name,
     target: habit.target,
-    createdAt: todayKey(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
     completedDates: [],
   }));
   writeHabits([...listHabits(), ...next]);
@@ -60,6 +65,7 @@ export function toggleHabit(id: number, date = todayKey()) {
       ? habit
       : {
           ...habit,
+          updatedAt: new Date().toISOString(),
           completedDates: habit.completedDates.includes(date)
             ? habit.completedDates.filter((item) => item !== date)
             : [...habit.completedDates, date],
@@ -79,6 +85,24 @@ export function toggleHabit(id: number, date = todayKey()) {
 
 export function deleteHabit(id: number) {
   writeHabits(listHabits().filter((habit) => habit.id !== id));
+}
+
+export function updateHabit(
+  id: number,
+  patch: Pick<Habit, "name" | "target">,
+) {
+  const next = listHabits().map((habit) =>
+    habit.id === id
+      ? {
+          ...habit,
+          name: patch.name.trim(),
+          target: patch.target?.trim() || undefined,
+          updatedAt: new Date().toISOString(),
+        }
+      : habit,
+  );
+  writeHabits(next);
+  return next.find((habit) => habit.id === id);
 }
 
 export function habitStreak(habit: Habit, from = todayKey()) {

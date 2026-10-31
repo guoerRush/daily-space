@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleCheckBig,
+  FolderSync,
   Image as ImageIcon,
   Plus,
   Search,
@@ -15,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { AppFrame } from "@/components/app-frame";
+import { RecordTimestamp } from "@/components/record-timestamp";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,8 +53,13 @@ import {
   findSuccessJournal,
   listSuccessJournals,
   saveSuccessJournal,
+  successJournalPlainText,
   type SuccessJournal,
 } from "@/lib/success-journals";
+import {
+  canExportToObsidian,
+  exportReflectionsToObsidian,
+} from "@/lib/obsidian-export";
 
 const emptyEntries: JournalEntry[] = [];
 
@@ -70,6 +77,13 @@ function subscribeSuccessJournals(callback: () => void) {
     window.removeEventListener("daily-space:success-journals-changed", callback);
 }
 
+function metaCognitionScore(entry: JournalEntry) {
+  if (!entry.metaCognition) return null;
+  return Number(entry.metaCognition.isObjective) +
+    Number(!entry.metaCognition.isAvoidingCoreIssue) +
+    Number(entry.metaCognition.isConfidentInAction);
+}
+
 function SuccessJournalPanel() {
   const entries = useSyncExternalStore(
     subscribeSuccessJournals,
@@ -78,14 +92,15 @@ function SuccessJournalPanel() {
   );
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [draft, setDraft] = useState(
-    () => findSuccessJournal(todayKey())?.content ?? "",
+    () => successJournalPlainText(findSuccessJournal(todayKey())?.content ?? ""),
   );
   const [message, setMessage] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const selectedEntry = entries.find((entry) => entry.date === selectedDate);
 
   const selectDate = (date: string) => {
     setSelectedDate(date);
-    setDraft(findSuccessJournal(date)?.content ?? "");
+    setDraft(successJournalPlainText(findSuccessJournal(date)?.content ?? ""));
     setMessage("");
   };
 
@@ -135,6 +150,16 @@ function SuccessJournalPanel() {
           placeholder="例如：我完成了原本犹豫很久的任务，也认真照顾了自己的状态。"
           className="min-h-28 resize-y bg-background/80 leading-6"
         />
+        {selectedEntry ? (
+          <RecordTimestamp
+            date={selectedDate}
+            createdAt={selectedEntry.createdAt}
+            updatedAt={selectedEntry.updatedAt}
+            className="mt-2"
+          />
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">这一天的成功日记尚未保存。</p>
+        )}
       </CardContent>
       <CardFooter className="flex flex-wrap justify-between gap-3 bg-background/35">
         <div>
@@ -164,7 +189,15 @@ function SuccessJournalPanel() {
                 className="w-full px-1 py-3 text-left transition-colors hover:bg-muted/55"
               >
                 <span className="font-medium text-foreground">{formatJournalDate(entry.date)}</span>
-                <span className="mt-1 block line-clamp-1 text-sm text-muted-foreground">{entry.content}</span>
+                <RecordTimestamp
+                  date={entry.date}
+                  createdAt={entry.createdAt}
+                  updatedAt={entry.updatedAt}
+                  className="mt-1"
+                />
+                <span className="mt-1 block line-clamp-2 whitespace-pre-line text-sm text-muted-foreground">
+                  {successJournalPlainText(entry.content)}
+                </span>
               </button>
             ))}
           </div>
@@ -180,12 +213,19 @@ export default function JournalsPage() {
     listJournals,
     () => emptyEntries,
   );
+  const successEntries = useSyncExternalStore(
+    subscribeSuccessJournals,
+    listSuccessJournals,
+    () => emptySuccessEntries,
+  );
   const [query, setQuery] = useState("");
   const [mood, setMood] = useState("全部心情");
   const [pendingDelete, setPendingDelete] = useState<JournalEntry | null>(null);
   const [expandedDates, setExpandedDates] = useState<Set<string>>(
     () => new Set(),
   );
+  const [obsidianStatus, setObsidianStatus] = useState("");
+  const [exportingToObsidian, setExportingToObsidian] = useState(false);
   const moods = [
     "全部心情",
     ...Array.from(new Set(entries.map((entry) => entry.mood))),
@@ -213,10 +253,36 @@ export default function JournalsPage() {
       else next.add(date);
       return next;
     });
+  const exportToObsidian = async () => {
+    if (!canExportToObsidian()) {
+      setObsidianStatus("当前浏览器不支持直接写入文件夹，请使用最新版 Edge 或 Chrome 打开网站。");
+      return;
+    }
+    setExportingToObsidian(true);
+    setObsidianStatus("请选择 Obsidian Vault 根目录，网站只会写入 00Raw/Personal/Weekly-reviews/MyMind/复盘手记。");
+    try {
+      const result = await exportReflectionsToObsidian(entries, successEntries);
+      setObsidianStatus(
+        `已同步 ${result.noteCount} 篇复盘${result.imageCount ? `和 ${result.imageCount} 张本地图片` : ""}到 ${result.folder}。以后保存日记或成功日记时会自动更新。`,
+      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setObsidianStatus("已取消 Obsidian 同步。");
+      } else if (error instanceof Error && error.message === "NOT_OBSIDIAN_VAULT") {
+        setObsidianStatus("所选文件夹不是 Obsidian Vault。请选择内部含有 .obsidian 的知识库根目录。");
+      } else if (error instanceof Error && error.message === "OBSIDIAN_PERMISSION_DENIED") {
+        setObsidianStatus("需要恢复 Obsidian 文件夹写入权限，授权后才会继续自动同步。");
+      } else {
+        setObsidianStatus("同步失败，知识库原有文件没有被删除，请重新选择 Obsidian Vault 后再试。");
+      }
+    } finally {
+      setExportingToObsidian(false);
+    }
+  };
 
   return (
-    <AppFrame>
-      <div className="mx-auto max-w-4xl">
+    <AppFrame compactContent>
+      <div className="w-full max-w-none">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-sm text-muted-foreground">你的全部记录</p>
@@ -228,11 +294,26 @@ export default function JournalsPage() {
               在日记编辑页顶部可选择“触动点日记”或“结构化复盘”。
             </p>
           </div>
-          <Button render={<Link href={`/journals/${todayKey()}`} />}>
-            <Plus data-icon="inline-start" />
-            写今日认知复盘
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => void exportToObsidian()}
+              disabled={exportingToObsidian || (!entries.length && !successEntries.length)}
+            >
+              <FolderSync data-icon="inline-start" />
+              {exportingToObsidian ? "正在同步" : "连接 / 同步 Obsidian"}
+            </Button>
+            <Button render={<Link href={`/journals/${todayKey()}`} />}>
+              <Plus data-icon="inline-start" />
+              写今日认知复盘
+            </Button>
+          </div>
         </div>
+        {obsidianStatus ? (
+          <p role="status" className="mt-3 rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-sm text-primary">
+            {obsidianStatus}
+          </p>
+        ) : null}
         <SuccessJournalPanel />
         <section className="mt-7 border border-border bg-card">
           <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row">
@@ -263,6 +344,7 @@ export default function JournalsPage() {
               {filtered.map((entry) => {
                 const expanded = expandedDates.has(entry.date);
                 const plainContent = richTextToPlainText(entry.content);
+                const metaScore = metaCognitionScore(entry);
                 const canExpand =
                   plainContent.length > 96 || Boolean(entry.highlights?.length);
                 return (
@@ -279,12 +361,14 @@ export default function JournalsPage() {
                           {formatJournalDate(entry.date)}
                         </Link>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          心情：{entry.mood} · 更新于{" "}
-                          {new Date(entry.updatedAt).toLocaleTimeString(
-                            "zh-CN",
-                            { hour: "2-digit", minute: "2-digit" },
-                          )}
+                          心情：{entry.mood}{metaScore !== null ? ` · 元认知 ${metaScore}/3` : ""}
                         </p>
+                        <RecordTimestamp
+                          date={entry.date}
+                          createdAt={entry.createdAt}
+                          updatedAt={entry.updatedAt}
+                          className="mt-1"
+                        />
                         {expanded ? (
                           <RichTextContent
                             value={entry.content}

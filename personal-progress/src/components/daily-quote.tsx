@@ -1,5 +1,7 @@
 "use client";
 
+import { GintokiAvatar } from "@/components/companion-shelf";
+
 const quotes = [
   "把注意力放回今天，微小的完成也会积成远方。",
   "不必等状态完美，先开始，状态会在路上出现。",
@@ -17,5 +19,5 @@ export function DailyQuote() {
   const now = new Date();
   const key = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
   const quote = quotes[key % quotes.length];
-  return <div className="border-b border-[#dfe5df] bg-[#eef5ef]"><div className="mx-auto max-w-[1500px] px-4 py-2 text-center text-sm text-[#45614f] md:px-8"><span className="mr-2 text-[#8ca994]">每日一句</span>{quote}</div></div>;
+  return <div className="border-b border-border/75 bg-secondary/55"><div className="mx-auto flex min-h-10 max-w-[1500px] items-center justify-center gap-2 px-4 py-1.5 text-center text-sm text-foreground md:px-8"><GintokiAvatar compact /><span className="hidden font-semibold text-primary sm:inline">银时休息站</span><span className="text-muted-foreground">{quote}</span></div></div>;
 }

@@ -8,7 +8,7 @@
   <title>日常留白 | 离线记录</title>
   <style>
     :root {
-      --bg: #f6f8f2;
+      --bg: #f4faf7;
       --surface: #fffefb;
       --surface-soft: #edf3e8;
       --ink: #24342a;
@@ -335,6 +335,81 @@
     .pet-bubble { position: fixed; right: 24px; bottom: 22px; z-index: 30; width: 76px; height: 76px; display: grid; place-items: center; border: 3px solid #d8b18a; border-radius: 50%; background: #f7cda9; box-shadow: 0 8px 20px rgba(83,57,38,.2); font-size: 39px; user-select: none; }
     .pet-bubble::after { content: "提醒"; position: absolute; right: -5px; bottom: -4px; border: 1px solid #cce0d1; border-radius: 9px; padding: 2px 5px; background: #f4fbf4; color: var(--primary); font-size: 10px; }
 
+    /* Mirrors the production AppFrame while keeping this file fully local. */
+    .shell { width: 100%; max-width: none; margin: 0; }
+    .sidebar { display: flex; flex-direction: column; top: 106px; }
+    main { padding: 40px 32px 56px; }
+    main > section { width: min(72rem, 100%); margin-inline: auto; }
+    .brand-mark { font-family: inherit; font-size: 0; }
+    .brand-mark svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .brand-copy small { margin-top: 2px; }
+    .header-actions { gap: 6px; }
+    .header-status { min-width: 168px; min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 9px; border: 1px solid #e5ece7; border-radius: 14px; background: rgba(255,255,255,.86); color: #47645a; box-shadow: 0 7px 22px rgba(49,108,99,.07); }
+    .header-status span { font-size: 21px; }
+    .header-status small, .header-status strong { display: block; line-height: 1.25; }
+    .header-status small { color: #7d8d84; font-size: 11px; font-weight: 500; }
+    .header-status strong { margin-top: 2px; font-size: 13px; }
+    .header-tool { width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 9px; background: transparent; color: #60736a; font-size: 18px; box-shadow: none; }
+    .header-tool:hover { background: #edf5f1; color: var(--primary); }
+    .daily-quote { min-height: 50px; display: flex; align-items: center; justify-content: center; gap: 9px; background: #dff5f6; color: #526f69; }
+    .daily-quote strong { color: #347563; }
+    .quote-avatar { position: relative; width: 30px; height: 30px; flex: 0 0 auto; border: 1px solid #c8d9dc; border-radius: 48% 48% 50% 50%; background: #ffe2c7; }
+    .quote-avatar::before { content: ""; position: absolute; inset: -5px -2px auto; height: 17px; border: 1px solid #52636a; border-bottom: 0; border-radius: 60% 60% 28% 28%; background: #eef4f5; clip-path: polygon(0 75%,10% 18%,25% 38%,40% 0,55% 34%,73% 8%,82% 42%,100% 20%,91% 100%,68% 76%,52% 100%,32% 73%,14% 100%); }
+    .nav-list { flex: 0 0 auto; }
+    .nav-button { min-height: 44px; border: 1px solid transparent; font-size: 14px; font-weight: 500; }
+    .nav-button[aria-selected="true"] { border-color: rgba(65,146,133,.15); background: #d9f2f7; color: #347c70; box-shadow: 0 5px 14px rgba(55,122,110,.08); }
+    .nav-icon { display: grid; place-items: center; color: currentColor; }
+    .nav-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .offline-note { display: none; }
+    .companion-shelf { display: flex; align-items: center; gap: 11px; margin-top: auto; border: 1px solid #d8e8e6; border-radius: 10px; padding: 11px; background: #eaf7f7; box-shadow: 0 8px 22px rgba(67,117,126,.08); }
+    .companion-shelf strong, .companion-shelf small { display: block; }
+    .companion-shelf strong { font-size: 12px; }
+    .companion-shelf small { margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+    .gintoki-avatar { position: relative; width: 42px; height: 44px; flex: 0 0 auto; }
+    .gintoki-face { position: absolute; left: 7px; top: 10px; width: 29px; height: 29px; border: 2px solid #52636a; border-radius: 46% 46% 50% 50%; background: #ffe2c7; }
+    .gintoki-face::before, .gintoki-face::after { content: ""; position: absolute; top: 11px; width: 6px; border-top: 2px solid #52636a; }
+    .gintoki-face::before { left: 5px; } .gintoki-face::after { right: 5px; }
+    .gintoki-hair { position: absolute; inset: 1px 2px auto; z-index: 2; height: 22px; border: 2px solid #52636a; border-bottom: 0; border-radius: 55% 55% 22% 22%; background: #eef4f5; clip-path: polygon(0 75%,10% 15%,25% 35%,39% 0,54% 32%,72% 6%,80% 40%,100% 18%,91% 100%,69% 76%,52% 100%,32% 73%,14% 100%); }
+    .dashboard-hero { min-height: 310px; grid-template-columns: minmax(0, 1fr) 304px; }
+    .dashboard-hero .hero-copy { padding: 32px; }
+    .dashboard-hero h1 { max-width: 19ch; margin: 8px 0 10px; font-size: 40px; }
+    .dashboard-hero .hero-copy > p:last-of-type { line-height: 1.7; }
+    #daily-art { width: 304px; height: auto; min-height: 0; aspect-ratio: 1213 / 667; justify-self: end; margin-right: 32px; background: #d9eadf url("hero.jpg") center / cover no-repeat; mask-image: url("data:image/svg+xml,%3Csvg width='221' height='122' viewBox='0 0 221 122' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M183 4C183 1.79086 184.791 0 187 0H217C219.209 0 221 1.79086 221 4V14V28V99C221 101.209 219.209 103 217 103H182C179.791 103 178 104.791 178 107V118C178 120.209 176.209 122 174 122H28C25.7909 122 24 120.209 24 118V103V94V46C24 43.7909 22.2091 42 20 42H4C1.79086 42 0 40.2091 0 38V18C0 15.7909 1.79086 14 4 14H24H43H179C181.209 14 183 12.2091 183 10V4Z' fill='%23D9D9D9'/%3E%3C/svg%3E"); -webkit-mask-image: url("data:image/svg+xml,%3Csvg width='221' height='122' viewBox='0 0 221 122' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M183 4C183 1.79086 184.791 0 187 0H217C219.209 0 221 1.79086 221 4V14V28V99C221 101.209 219.209 103 217 103H182C179.791 103 178 104.791 178 107V118C178 120.209 176.209 122 174 122H28C25.7909 122 24 120.209 24 118V103V94V46C24 43.7909 22.2091 42 20 42H4C1.79086 42 0 40.2091 0 38V18C0 15.7909 1.79086 14 4 14H24H43H179C181.209 14 183 12.2091 183 10V4Z' fill='%23D9D9D9'/%3E%3C/svg%3E"); mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; mask-size: contain; -webkit-mask-size: contain; }
+    .clarity { margin-top: 8px; font-size: 42px; line-height: 1.1; }
+    .hero-actions { margin-top: 14px; }
+    .summary-grid { gap: 14px; }
+    .summary-item { min-height: 140px; display: block; padding: 16px; border-radius: 12px; }
+    .summary-item::before { display: none; }
+    .summary-icon { width: 29px; height: 29px; display: grid !important; place-items: center; border-radius: 9px; font-size: 15px !important; }
+    .tone-green { background: #edf6ef; color: #35704b !important; }
+    .tone-orange { background: #fff3e5; color: #a5632e !important; }
+    .tone-blue { background: #eef2fb; color: #526b9b !important; }
+    .tone-pink { background: #f9eff3; color: #9b5d75 !important; }
+    .summary-copy { display: flex; align-items: end; justify-content: space-between; gap: 8px; margin-top: 8px; }
+    .summary-copy strong { margin: 0; color: #203126; font-size: 22px; }
+    .summary-copy span, .summary-copy small { display: block; }
+    .summary-copy span { margin-top: 2px; color: #718077; font-size: 14px; }
+    .summary-copy small { margin-top: 2px; color: #93a197; font-size: 12px; }
+    .summary-chevron { color: #718077; font-size: 16px; }
+    .dashboard-remarks-panel { margin-top: 12px; border: 1px solid #b9d7c0; padding: 16px 20px; background: #f4faf4; box-shadow: 0 5px 18px rgba(47,102,81,.08); }
+    .dashboard-remarks-panel .section-header { margin-bottom: 0; align-items: center; }
+    .remarks-title { display: flex; align-items: center; gap: 10px; }
+    .remarks-title-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: #dcefdc; color: #2f6651; }
+    .dashboard-remarks-panel .button { min-height: auto; border: 0; padding: 5px; background: transparent; color: #2f6651; box-shadow: none; }
+    .dashboard-remarks-panel .button:hover { background: transparent; text-decoration: underline; }
+    .dashboard-remarks-panel .empty-state { padding: 13px; border-color: #bdd6c3; border-radius: 0; background: rgba(255,255,255,.55); text-align: left; }
+    .remark-row { border-color: rgba(255,255,255,.8); background: rgba(255,255,255,.75); }
+    .pet-bubble { width: 68px; height: 68px; overflow: visible; border: 4px solid white; background: #f8c75a; font-size: 0; box-shadow: 0 9px 24px rgba(55,105,97,.24); }
+    .pet-bubble::after { content: "◷"; right: -8px; bottom: -7px; width: 25px; height: 25px; display: grid; place-items: center; border: 0; border-radius: 50%; padding: 0; background: var(--primary); color: white; font-size: 15px; }
+    .shin-face { position: absolute; inset: 5px 6px 10px; border: 2px solid #3f3532; border-radius: 46% 52% 48% 44%; background: #ffd7b6; }
+    .shin-hair { position: absolute; left: 3px; right: 3px; top: 1px; z-index: 2; height: 20px; border-radius: 60% 48% 24% 18%; background: #352d2a; transform: rotate(-4deg); }
+    .shin-brow { position: absolute; z-index: 3; top: 24px; width: 13px; border-top: 4px solid #352d2a; border-radius: 999px; }
+    .shin-brow.left { left: 13px; transform: rotate(6deg); } .shin-brow.right { right: 12px; transform: rotate(-7deg); }
+    .shin-eye { position: absolute; z-index: 3; top: 31px; width: 5px; height: 6px; border-radius: 50%; background: #352d2a; }
+    .shin-eye.left { left: 19px; } .shin-eye.right { right: 18px; }
+    .shin-mouth { position: absolute; z-index: 3; left: 30px; bottom: 18px; width: 15px; height: 8px; border-bottom: 3px solid #bd5956; border-radius: 50%; transform: rotate(-7deg); }
+    .shin-shirt { position: absolute; inset: auto 12px 0; height: 15px; border-radius: 45% 45% 0 0; background: #e6685d; }
+
     dialog {
       width: min(430px, calc(100% - 32px));
       border: 1px solid var(--line);
@@ -366,12 +441,16 @@
     @media (max-width: 760px) {
       .header-inner { padding-inline: 14px; }
       .header-actions .secondary { display: none; }
+      .header-status, #export-button, #import-button { display: none; }
+      .daily-quote { min-height: 48px; padding: 7px 12px; font-size: 12px; text-align: left; }
       .shell { display: block; padding: 0 0 88px; }
       .sidebar { display: none; }
       main { padding: 16px 14px 28px; }
       .hero { min-height: 245px; grid-template-columns: 1fr; }
       .hero-copy { padding: 24px 22px 0; }
-      #daily-art { min-height: 110px; height: 110px; }
+      #daily-art { display: none; }
+      .dashboard-hero .hero-copy { padding: 24px 22px; }
+      .dashboard-hero h1 { font-size: 32px; }
       .summary-grid, .summary-grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .summary-item { min-height: 76px; display: flex; align-items: center; justify-content: space-between; }
       .summary-item strong { margin: 0; }
@@ -415,32 +494,33 @@
   <header class="app-header">
     <div class="header-inner">
       <div class="brand" aria-label="日常留白离线版">
-        <span class="brand-mark" aria-hidden="true">日</span>
-        <span class="brand-copy"><strong>日常留白</strong><small>个人记录与复盘 · 离线版</small></span>
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 4.5A2.5 2.5 0 0 1 4.5 2H9a3 3 0 0 1 3 3v17a3 3 0 0 0-3-3H4.5A2.5 2.5 0 0 1 2 16.5Z"/><path d="M22 4.5A2.5 2.5 0 0 0 19.5 2H15a3 3 0 0 0-3 3v17a3 3 0 0 1 3-3h4.5a2.5 2.5 0 0 0 2.5-2.5Z"/></svg></span>
+        <span class="brand-copy"><strong>日常留白</strong><small>个人记录与复盘</small></span>
       </div>
       <div class="header-actions">
-        <button class="button secondary" id="export-button" type="button">导出备份</button>
-        <button class="button secondary" id="import-button" type="button">导入备份</button>
-        <button class="icon-button" id="more-button" type="button" aria-label="清空全部数据" title="清空全部数据">×</button>
+        <div class="header-status"><span aria-hidden="true">☁</span><div><small id="header-clock"></small><strong>本地使用</strong></div></div>
+        <button class="header-tool" id="export-button" type="button" aria-label="导出备份" title="导出备份">⇩</button>
+        <button class="header-tool" id="import-button" type="button" aria-label="导入备份" title="导入备份">⇧</button>
+        <button class="header-tool" id="more-button" type="button" aria-label="数据设置" title="清空全部本地数据">⚙</button>
         <input class="sr-only" id="import-file" type="file" accept="application/json,.json">
       </div>
     </div>
-    <div class="daily-quote" id="daily-quote"><strong>今日一句</strong>　真正的自律，是在疲惫时仍对自己保持温柔。</div>
+    <div class="daily-quote" id="daily-quote"><span class="quote-avatar" aria-hidden="true"></span><strong>银时休息站</strong><span id="daily-quote-text">记录不是为了证明什么，而是为了看见自己走过的路。</span></div>
   </header>
 
   <div class="shell">
     <aside class="sidebar" aria-label="主导航">
       <nav class="nav-list" role="tablist" aria-orientation="vertical">
         <span class="eyebrow">工作台</span>
-        <button class="nav-button" type="button" role="tab" aria-selected="true" data-view="dashboard"><span class="nav-icon">▦</span>全景看板</button>
-        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="calendar"><span class="nav-icon">□</span>日程</button>
-        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="days"><span class="nav-icon">◇</span>纪念日倒计时</button>
-        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="review"><span class="nav-icon">▤</span>复盘手记</button>
-        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="notes"><span class="nav-icon">▱</span>闲思札记</button>
-        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="plan"><span class="nav-icon">▥</span>当日计划</button>
-        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="goals"><span class="nav-icon">◎</span>目标与习惯</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="true" data-view="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span>全景看板</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="calendar"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18"/><rect width="18" height="18" x="3" y="4" rx="2"/></svg></span>日程</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="days"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 2v4M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M12 18s-3-1.8-3-4a1.8 1.8 0 0 1 3-1.3A1.8 1.8 0 0 1 15 14c0 2.2-3 4-3 4Z"/></svg></span>纪念日倒计时</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="review"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M2 4.5A2.5 2.5 0 0 1 4.5 2H9a3 3 0 0 1 3 3v17a3 3 0 0 0-3-3H4.5A2.5 2.5 0 0 1 2 16.5Z"/><path d="M22 4.5A2.5 2.5 0 0 0 19.5 2H15a3 3 0 0 0-3 3v17a3 3 0 0 1 3-3h4.5a2.5 2.5 0 0 0 2.5-2.5Z"/></svg></span>复盘手记</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="notes"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg></span>闲思札记</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="plan"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect width="16" height="18" x="4" y="4" rx="2"/><path d="M9 2h6v4H9zM9 12h6M9 16h4"/></svg></span>当日计划</button>
+        <button class="nav-button" type="button" role="tab" aria-selected="false" data-view="goals"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></span>目标与习惯</button>
       </nav>
-      <p class="offline-note">这是不含任何历史记录的空白副本。可导出 JSON 备份，换浏览器时再手动导入。</p>
+      <section class="companion-shelf" aria-label="银时休息站"><span class="gintoki-avatar" aria-hidden="true"><span class="gintoki-hair"></span><span class="gintoki-face"></span></span><span><strong>银时休息站</strong><small>认真做事，也要安心休息。</small></span></section>
     </aside>
 
     <main>
@@ -448,35 +528,35 @@
         <div class="hero dashboard-hero">
           <div class="hero-copy">
             <p class="date-line" id="date-line"></p>
-            <h1>把今天过成自己的作品</h1>
-            <p>不追求满分，只把真正重要的事情做得更用心。</p>
+            <h1 id="hero-title">把今天，认真地留给自己</h1>
+            <p id="hero-description">先安排最重要的一件事，再用记录看见每一点真实的进步。</p>
             <div class="clarity" title="当计划很多或思绪很乱时，先写下来，再为一天保留一条主线。">清晰</div>
             <div class="hero-actions">
-              <button class="button" type="button" data-go="review">写今日复盘</button>
+              <button class="button" type="button" data-go="review">✎ 写今日日记</button>
               <button class="button secondary" type="button" data-go="plan">今日安排</button>
             </div>
           </div>
-          <canvas id="daily-art" aria-label="晨光中的枝叶插画" role="img"></canvas>
+          <canvas id="daily-art" aria-label="晨光风景照片" role="img"></canvas>
         </div>
 
         <div class="summary-grid four" aria-label="今日概览">
-          <div class="summary-item"><span>待办完成</span><strong id="task-summary">0 / 0</strong></div>
-          <div class="summary-item"><span>习惯打卡</span><strong id="habit-summary">0 / 0</strong></div>
-          <div class="summary-item"><span>复盘手记</span><strong id="review-summary">0</strong></div>
-          <div class="summary-item"><span>闲思札记</span><strong id="note-summary">0</strong></div>
+          <div class="summary-item"><span class="summary-icon tone-green">✓</span><div class="summary-copy"><div><strong id="task-summary">-</strong><span>今日待办完成</span><small>查看今日安排</small></div></div></div>
+          <div class="summary-item"><span class="summary-icon tone-orange">◔</span><div class="summary-copy"><div><strong id="review-summary">0</strong><span>日记回顾</span><small id="streak-summary">连续记录 0 天</small></div><span class="summary-chevron">⌄</span></div></div>
+          <div class="summary-item"><span class="summary-icon tone-blue">✣</span><div class="summary-copy"><div><strong id="success-summary">0</strong><span>成功日记</span><small>展开查看记录</small></div><span class="summary-chevron">⌄</span></div></div>
+          <div class="summary-item"><span class="summary-icon tone-pink">□</span><div class="summary-copy"><div><strong id="note-summary">0</strong><span>随记</span><small>展开查看记录</small></div><span class="summary-chevron">⌄</span></div></div>
         </div>
 
-        <div class="panel" style="margin-top:14px">
+        <section class="dashboard-remarks-panel">
           <div class="section-header">
-            <div><h2>今日备注</h2><p id="remark-count">还没有需要留意的内容</p></div>
+            <div class="remarks-title"><span class="remarks-title-icon">□</span><div><h2>今日备注</h2><p id="remark-count">把重要提醒写进今日安排</p></div></div>
             <button class="button secondary" type="button" data-go="plan">查看与修改</button>
           </div>
           <div class="remarks-list" id="dashboard-remarks"></div>
-        </div>
+        </section>
 
         <div class="dashboard-grid">
           <div class="panel"><h2>今日安排</h2><p class="panel-copy">仅展示今天的待办、计划与实际完成情况。</p><div id="dashboard-plan"></div></div>
-          <div class="panel"><h2>记录此刻</h2><p class="panel-copy">用三个动作完成今天的记录与复盘。</p><div class="action-stack"><button class="button" type="button" data-go="review">写今日复盘</button><button class="button secondary" type="button" data-go="notes">写一条札记</button><button class="button secondary" type="button" data-go="review" data-review-type="success">记录今天的成功</button></div></div>
+          <div class="panel"><h2>记录此刻</h2><p class="panel-copy">用三个动作完成今天的记录与复盘。</p><div class="action-stack"><button class="button" type="button" data-go="review">写今日日记</button><button class="button secondary" type="button" data-go="review">写下今日反思</button><button class="button secondary" type="button" data-go="review" data-review-type="success">记录今天的成功</button></div></div>
         </div>
       </section>
 
@@ -538,7 +618,7 @@
     </main>
   </div>
 
-  <button class="pet-bubble" id="pet-button" type="button" aria-label="打开离线提醒">🖍️</button>
+  <button class="pet-bubble" id="pet-button" type="button" aria-label="打开本地提醒"><span class="shin-face"></span><span class="shin-hair"></span><span class="shin-brow left"></span><span class="shin-brow right"></span><span class="shin-eye left"></span><span class="shin-eye right"></span><span class="shin-mouth"></span><span class="shin-shirt"></span></button>
 
   <nav class="mobile-nav" aria-label="移动端主导航" role="tablist">
     <button class="nav-button" type="button" role="tab" aria-selected="true" data-view="dashboard"><span class="nav-icon">▦</span>看板</button>
@@ -880,16 +960,23 @@
       }
 
       function renderSummary() {
-        $("#task-summary").textContent = `${state.tasks.filter((item) => item.done).length} / ${state.tasks.length}`;
-        $("#habit-summary").textContent = `${state.habits.filter((item) => item.dates.includes(dateKey)).length} / ${state.habits.length}`;
-        $("#review-summary").textContent = String(state.reviews.length);
+        const reflections = state.reviews.filter((item) => item.type !== "success");
+        const successes = state.reviews.filter((item) => item.type === "success");
+        $("#task-summary").textContent = state.tasks.length ? `${state.tasks.filter((item) => item.done).length}/${state.tasks.length}` : "-";
+        $("#review-summary").textContent = String(reflections.length);
+        $("#success-summary").textContent = String(successes.length);
         $("#note-summary").textContent = String(state.notes.length);
+        const recordedDates = new Set(reflections.map((item) => item.date));
+        let streak = 0;
+        const cursor = new Date(`${dateKey}T12:00:00`);
+        while (recordedDates.has(toDateKey(cursor))) { streak += 1; cursor.setDate(cursor.getDate() - 1); }
+        $("#streak-summary").textContent = `连续记录 ${streak} 天`;
       }
 
       function renderDashboard() {
         const remarks = lines(state.plan.remarks);
         const remaining = remarks.filter((_, index) => !state.plan.completedRemarks.includes(index)).length;
-        $("#remark-count").textContent = remarks.length ? `还有 ${remaining} 条需要留意` : "还没有需要留意的内容";
+        $("#remark-count").textContent = remarks.length ? `还有 ${remaining} 条需要留意` : "把重要提醒写进今日安排";
         $("#dashboard-remarks").innerHTML = remarks.length ? remarks.map((remark, index) => {
           const done = state.plan.completedRemarks.includes(index);
           return `<div class="remark-row"><button class="mini-check" data-remark-index="${index}" type="button" role="checkbox" aria-checked="${done}" aria-label="${done ? "取消完成" : "标记完成"}">${done ? "✓" : ""}</button><span class="task-label${done ? " done" : ""}">${escapeText(remark)}</span></div>`;
@@ -973,16 +1060,34 @@
       }
 
       function drawArt() {
-        const canvas = $("#daily-art"); const rect = canvas.getBoundingClientRect(); const ratio = Math.min(window.devicePixelRatio || 1, 2);
-        canvas.width = Math.max(1, Math.round(rect.width * ratio)); canvas.height = Math.max(1, Math.round(rect.height * ratio));
-        const ctx = canvas.getContext("2d"); ctx.scale(ratio, ratio); const w = rect.width; const h = rect.height;
-        const wash = ctx.createLinearGradient(0, 0, w, h); wash.addColorStop(0, "#d7eee5"); wash.addColorStop(1, "#fff0c7"); ctx.fillStyle = wash; ctx.fillRect(0, 0, w, h);
-        ctx.globalAlpha = .55; ctx.fillStyle = "#fffdf3"; ctx.beginPath(); ctx.arc(w * .72, h * .28, Math.min(w, h) * .2, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-        ctx.strokeStyle = "#51775f"; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(w * .95, h * 1.03); ctx.bezierCurveTo(w * .78, h * .72, w * .65, h * .53, w * .36, h * .14); ctx.stroke();
-        [[.79,.75,-.35,19],[.72,.64,.55,18],[.64,.53,-.45,17],[.56,.42,.55,16],[.48,.31,-.55,15]].forEach(([x,y,angle,size], index) => { ctx.save(); ctx.translate(w*x,h*y); ctx.rotate(angle); ctx.fillStyle = index % 2 ? "#7d9a83" : "#5c8369"; ctx.beginPath(); ctx.ellipse(0,0,size*1.5,size*.58,0,0,Math.PI*2); ctx.fill(); ctx.restore(); });
+        // The production hero uses a masked photograph supplied by CSS.
       }
 
       $("#date-line").textContent = formatToday();
+      const heroMessages = [
+        ["把今天，认真地留给自己", "先安排最重要的一件事，再用记录看见每一点真实的进步。"],
+        ["慢一点，也是在向前走", "把注意力收回当下，完成眼前这一小步就很好。"],
+        ["今天的行动，会回答明天", "不必等状态完美，先从最容易开始的事情做起。"],
+        ["认真生活，也认真记录", "留下感受、收获和反思，让每一天都有来处。"],
+        ["让重要的事，先发生", "清空杂念，选定优先级，把时间交给真正想成为的自己。"],
+        ["把一点坚持，变成自己的力量", "习惯不是一次做到很多，而是每天都没有放弃。"],
+        ["给今天一个清晰的开始", "写下计划，专注执行，也为意外留一点空间。"],
+        ["生活值得被温柔地看见", "记录平常的小事，它们会成为未来回望时的光。"],
+        ["今天也可以重新开始", "过去的安排可以调整，现在的一步依然算数。"],
+        ["用专注，换来内心的笃定", "先完成一件小事，再慢慢找回属于自己的节奏。"],
+        ["每一次复盘，都在靠近更好的自己", "看见经验，而不是责备自己，把收获带到明天。"],
+        ["给努力留下一份证据", "写下完成的事和闪光的瞬间，成长会变得清晰可见。"],
+        ["把今天过成自己的作品", "不追求满分，只把真正重要的事情做得更用心。"],
+        ["今天的你，已经足够值得肯定", "从容安排，踏实完成，别忘了感谢认真生活的自己。"]
+      ];
+      const dailyQuotes = ["记录不是为了证明什么，而是为了看见自己走过的路。", "真正的自律，是在疲惫时仍对自己保持温柔。", "先把眼前的一步做好，答案会在行动中出现。", "认真生活的人，也值得认真休息。"];
+      const dailyIndex = (today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate());
+      const heroMessage = heroMessages[dailyIndex % heroMessages.length];
+      $("#hero-title").textContent = heroMessage[0];
+      $("#hero-description").textContent = heroMessage[1];
+      $("#daily-quote-text").textContent = dailyQuotes[dailyIndex % dailyQuotes.length];
+      const updateClock = () => { const now = new Date(); $("#header-clock").textContent = `${now.getMonth() + 1}/${now.getDate()}周${"日一二三四五六"[now.getDay()]} · ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`; };
+      updateClock(); window.setInterval(updateClock, 60_000);
       $$('[data-view]').forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
       $$('[data-go]').forEach((button) => button.addEventListener("click", () => { if (button.dataset.reviewType) setReviewType(button.dataset.reviewType); showView(button.dataset.go); }));
       $("#dashboard-remarks").addEventListener("click", (event) => { const button = event.target.closest("[data-remark-index]"); if (!button) return; const index = Number(button.dataset.remarkIndex); state.plan.completedRemarks = state.plan.completedRemarks.includes(index) ? state.plan.completedRemarks.filter((item) => item !== index) : [...state.plan.completedRemarks, index]; saveState(); renderDashboard(); });

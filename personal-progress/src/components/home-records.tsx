@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RecordTimestamp } from "@/components/record-timestamp";
 import {
   Card,
   CardContent,
@@ -33,9 +34,9 @@ import {
 import {
   formatJournalDate,
   listJournals,
-  todayKey,
   type JournalEntry,
 } from "@/lib/journals";
+import { useTodayKey } from "@/hooks/use-today-key";
 import { categoryInfo, listNotes, type Note } from "@/lib/notes";
 import { listDailyPlans, type StoredDayPlan } from "@/lib/plans";
 import {
@@ -78,15 +79,16 @@ function useHistory() {
 
 export function HomeRecords() {
   const { journals, plans, successes, notes } = useHistory();
+  const today = useTodayKey();
   const [expanded, setExpanded] = useState<HistoryKind | null>(null);
   const [successOpen, setSuccessOpen] = useState(false);
   const [successDraft, setSuccessDraft] = useState("");
   const [successSession, setSuccessSession] = useState(0);
-  const todayPlan = plans.find((entry) => entry.date === todayKey());
+  const todayPlan = plans.find((entry) => entry.date === today);
   const toggle = (kind: HistoryKind) =>
     setExpanded((current) => (current === kind ? null : kind));
   const openSuccessJournal = () => {
-    setSuccessDraft(findSuccessJournal(todayKey())?.content ?? "");
+    setSuccessDraft(findSuccessJournal(today)?.content ?? "");
     setSuccessSession((current) => current + 1);
     setSuccessOpen(true);
   };
@@ -105,14 +107,14 @@ export function HomeRecords() {
           <CardContent className="flex flex-col gap-2">
             <Button
               className="w-full"
-              render={<Link href={`/journals/${todayKey()}`} />}
+              render={<Link href={`/journals/${today}`} />}
             >
               写今日日记
             </Button>
             <Button
               className="w-full"
               variant="outline"
-              render={<Link href={`/journals/${todayKey()}#reflection`} />}
+              render={<Link href={`/journals/${today}#reflection`} />}
             >
               写下今日反思
             </Button>
@@ -251,6 +253,14 @@ function TodayPlanCard({ entry }: { entry: PlanEntry | undefined }) {
             今天还没有安排，先把要做的事写下来。
           </p>
         )}
+        {plan && entry ? (
+          <RecordTimestamp
+            date={entry.date}
+            createdAt={plan.createdAt}
+            updatedAt={plan.updatedAt}
+            className="mt-3"
+          />
+        ) : null}
         <div className="mt-4 flex items-center justify-between border-t border-[#dfe5df] pt-3 text-sm">
           <span className="font-medium text-[#526158]">英语听写</span>
           <span className={dictationComplete ? "text-[#2f6651]" : "text-[#8a968e]"}>{dictationComplete ? "已完成" : "未完成"}</span>
@@ -380,6 +390,7 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
         心情：{entry.mood}
         {entry.images?.length ? ` · ${entry.images.length} 张图片` : ""}
       </p>
+      <RecordTimestamp date={entry.date} createdAt={entry.createdAt} updatedAt={entry.updatedAt} className="mt-1" />
       <RichTextContent
         value={entry.content}
         emptyText="这一天还没有写下正文。"
@@ -399,7 +410,11 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
 function SuccessRow({ entry }: { entry: SuccessJournal }) {
   return (
     <article className="border-b border-border px-5 py-5 last:border-0">
-      <h3 className="font-medium">{formatJournalDate(entry.date)}</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-medium">{formatJournalDate(entry.date)}</h3>
+        <Link href="/journals" className="text-sm text-primary hover:underline">修改</Link>
+      </div>
+      <RecordTimestamp date={entry.date} createdAt={entry.createdAt} updatedAt={entry.updatedAt} className="mt-1" />
       <RichTextContent
         value={entry.content}
         className="mt-3 text-sm leading-6 text-foreground/80"
@@ -415,15 +430,10 @@ function NoteRow({ entry }: { entry: Note }) {
         <div>
           <h3 className="font-medium">{entry.title || "未命名随记"}</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            {categoryInfo[entry.category].label} ·{" "}
-            {new Date(entry.updatedAt).toLocaleString("zh-CN", {
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            {categoryInfo[entry.category].label}
             {entry.images.length ? ` · ${entry.images.length} 张图片` : ""}
           </p>
+          <RecordTimestamp id={entry.id} createdAt={entry.createdAt} updatedAt={entry.updatedAt} className="mt-1" />
         </div>
         <Link
           href={`/notes/${entry.category}`}
@@ -449,7 +459,7 @@ function SuccessJournalDialog({
   initialContent: string;
   onOpenChange: (open: boolean) => void;
 }) {
-  const date = todayKey();
+  const date = useTodayKey();
   const [content, setContent] = useState(initialContent);
   const [status, setStatus] = useState("");
 

@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Check, CheckCircle2, ChevronDown, ChevronUp, Flame, Sparkles, StickyNote } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ChevronUp, Flame, Sparkles, StickyNote, X } from "lucide-react";
 import {
   RichTextContent,
   richTextToPlainText,
 } from "@/components/rich-text-editor";
 import { listJournals, todayKey, type JournalEntry } from "@/lib/journals";
 import { listNotes, type Note } from "@/lib/notes";
-import { buildRemarkItems, type RemarkItem } from "@/lib/plans";
+import { buildRemarkItems, remarkItemsToHtml, type RemarkItem } from "@/lib/plans";
 import { listSuccessJournals, type SuccessJournal } from "@/lib/success-journals";
+import { remarkCompletionId, setCompletionStatus } from "@/lib/completions";
 
 type Plan = {
   tasks?: Array<{ done: boolean }>;
@@ -64,7 +65,7 @@ export function DashboardInsights() {
   useEffect(() => {
     const refresh = () => setData(getData());
     refresh();
-    const events = ["daily-space:journals-changed", "daily-space:notes-changed", "daily-space:plans-changed", "daily-space:success-journals-changed"];
+    const events = ["daily-space:journals-changed", "daily-space:notes-changed", "daily-space:plans-changed", "daily-space:success-journals-changed", "daily-space:goals-changed", "daily-space:completion-history-changed"];
     events.forEach((event) => window.addEventListener(event, refresh));
     return () => events.forEach((event) => window.removeEventListener(event, refresh));
   }, []);
@@ -75,11 +76,66 @@ export function DashboardInsights() {
       const key = `daily-space:plan:${todayKey()}`;
       const plan = JSON.parse(window.localStorage.getItem(key) ?? "{}") as Plan;
       const checks = plan.remarkChecks ?? {};
+      const item = buildRemarkItems(plan.remarks ?? "", checks).find(
+        (candidate) => candidate.id === id,
+      );
+      const done = !checks[id];
+      if (item) {
+        setCompletionStatus(
+          {
+            id: remarkCompletionId(todayKey(), item.text),
+            kind: "remark",
+            title: item.text,
+            completedDate: todayKey(),
+            sourceDate: todayKey(),
+          },
+          done,
+        );
+      }
       window.localStorage.setItem(
         key,
         JSON.stringify({
           ...plan,
-          remarkChecks: { ...checks, [id]: !checks[id] },
+          remarkChecks: { ...checks, [id]: done },
+        }),
+      );
+      window.dispatchEvent(new Event("daily-space:plans-changed"));
+    } catch {
+      // Keep the dashboard usable when a legacy plan cannot be read.
+    }
+  };
+  const removeTodayRemark = (id: string) => {
+    try {
+      const key = `daily-space:plan:${todayKey()}`;
+      const plan = JSON.parse(window.localStorage.getItem(key) ?? "{}") as Plan;
+      const items = buildRemarkItems(
+        plan.remarks ?? "",
+        plan.remarkChecks ?? {},
+      );
+      const removed = items.find((item) => item.id === id);
+      if (!removed?.done) return;
+      setCompletionStatus(
+        {
+          id: remarkCompletionId(todayKey(), removed.text),
+          kind: "remark",
+          title: removed.text,
+          completedDate: todayKey(),
+          sourceDate: todayKey(),
+        },
+        true,
+      );
+      const remaining = items.filter((item) => item.id !== id);
+      const remarkChecks = Object.fromEntries(
+        remaining
+          .map((item, index) => [`${index}:${item.text}`, item.done] as const)
+          .filter((entry) => entry[1]),
+      );
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({
+          ...plan,
+          remarks: remarkItemsToHtml(remaining),
+          remarkChecks,
         }),
       );
       window.dispatchEvent(new Event("daily-space:plans-changed"));
@@ -102,12 +158,12 @@ export function DashboardInsights() {
         return card.href ? <Link key={card.label} href={card.href} className="rounded-xl border border-[#dce6de] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(31,67,45,0.03)] transition-all hover:-translate-y-0.5 hover:border-[#a6c2ae] hover:shadow-[0_8px_20px_rgba(35,75,51,0.08)]">{content}</Link> : <button key={card.label} type="button" onClick={() => toggle(card.kind!)} aria-expanded={expanded === card.kind} className="rounded-xl border border-[#dce6de] bg-white px-4 py-3 text-left shadow-[0_1px_2px_rgba(31,67,45,0.03)] transition-all hover:-translate-y-0.5 hover:border-[#a6c2ae] hover:shadow-[0_8px_20px_rgba(35,75,51,0.08)]">{content}</button>;
       })}
     </section>
-    <TodayRemarksPanel remarks={data.remarks} onToggle={toggleTodayRemark} />
+    <TodayRemarksPanel remarks={data.remarks} onToggle={toggleTodayRemark} onRemove={removeTodayRemark} />
     {expanded ? <ReviewPanel kind={expanded} journals={data.journals} successes={data.successes} notes={data.notes} /> : null}
   </>;
 }
 
-function TodayRemarksPanel({ remarks, onToggle }: { remarks: RemarkItem[]; onToggle: (id: string) => void }) {
+function TodayRemarksPanel({ remarks, onToggle, onRemove }: { remarks: RemarkItem[]; onToggle: (id: string) => void; onRemove: (id: string) => void }) {
   const unfinished = remarks.filter((item) => !item.done).length;
   const [expanded, setExpanded] = useState(false);
   const visibleRemarks = expanded ? remarks : remarks.slice(0, 3);
@@ -120,11 +176,12 @@ function TodayRemarksPanel({ remarks, onToggle }: { remarks: RemarkItem[]; onTog
       <Link href="/plan" className="text-sm font-medium text-[#2f6651] hover:underline">查看与修改</Link>
     </div>
     {remarks.length ? <ul className="mt-4 grid gap-2 md:grid-cols-2">
-      {visibleRemarks.map((item) => <li key={item.id} className={`border border-white/80 bg-white/75 ${item.done ? "text-[#809086]" : "font-medium text-[#355642]"}`}>
-        <button type="button" onClick={() => onToggle(item.id)} aria-pressed={item.done} className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm leading-6">
+      {visibleRemarks.map((item) => <li key={item.id} className={`flex items-start border border-white/80 bg-white/75 ${item.done ? "text-[#809086]" : "font-medium text-[#355642]"}`}>
+        <button type="button" onClick={() => onToggle(item.id)} aria-pressed={item.done} className="flex min-w-0 flex-1 items-start gap-2 px-3 py-2 text-left text-sm leading-6">
           <span className={`mt-1 grid h-4 w-4 shrink-0 place-items-center rounded-full border ${item.done ? "border-[#4e8b5d] bg-[#4e8b5d] text-white" : "border-[#6d9a78] bg-white"}`}>{item.done ? <Check size={11} /> : null}</span>
           <span className={item.done ? "line-through" : ""}>{item.text}</span>
         </button>
+        {item.done ? <button type="button" onClick={() => onRemove(item.id)} aria-label={`移除已完成备注：${item.text}`} title="移除并保留到完成汇总" className="m-2 grid size-7 shrink-0 place-items-center rounded-lg text-[#809086] hover:bg-[#edf6ef] hover:text-[#315944]"><X size={14} /></button> : null}
       </li>)}
     </ul> : <p className="mt-4 border border-dashed border-[#bdd6c3] bg-white/55 px-3 py-3 text-sm text-[#718077]">暂无备注。点击“查看与修改”去记录今天需要持续提醒自己的事。</p>}
     {remarks.length > 3 ? <button type="button" onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[#2f6651] hover:underline">

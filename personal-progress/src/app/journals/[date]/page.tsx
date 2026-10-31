@@ -18,11 +18,14 @@ import {
   History,
   ImagePlus,
   Link as LinkIcon,
+  Maximize2,
   Search,
   Sparkles,
   X,
 } from "lucide-react";
 import { AppFrame } from "@/components/app-frame";
+import { ImageLightbox } from "@/components/image-lightbox";
+import { RecordTimestamp } from "@/components/record-timestamp";
 import {
   RichTextEditor,
   plainTextToRichHtml,
@@ -82,6 +85,65 @@ const defaultMeta: MetaCognition = {
   isConfidentInAction: false,
 };
 
+const metaChecks = [
+  {
+    key: "isObjective",
+    label: "我今天的复盘是否客观？",
+    passed: (value: boolean) => value,
+    passedText: "已区分事实、感受和判断",
+    guidance: "客观性不足：补充一条可观察的事实，以及支持判断的具体证据。",
+    prompt: "客观事实与证据：",
+    resolvedValue: true,
+  },
+  {
+    key: "isAvoidingCoreIssue",
+    label: "我是否回避了某个核心问题？",
+    passed: (value: boolean) => !value,
+    passedText: "没有回避核心问题",
+    guidance: "仍在回避：直接写出最不愿面对的问题，以及回避它要付出的代价。",
+    prompt: "我真正回避的问题与代价：",
+    resolvedValue: false,
+  },
+  {
+    key: "isConfidentInAction",
+    label: "我对改进措施有真实信心吗？",
+    passed: (value: boolean) => value,
+    passedText: "改进措施具备执行意愿",
+    guidance: "行动信心不足：把措施缩小为明天愿意真正完成的最小一步。",
+    prompt: "明天愿意执行的最小行动：",
+    resolvedValue: true,
+  },
+] as const;
+
+function hasMetaResponse(content: string, prompt: string) {
+  const text = richTextToPlainText(content);
+  const start = text.indexOf(prompt);
+  if (start < 0) return false;
+  const answerStart = start + prompt.length;
+  const nextPrompt = metaChecks
+    .map((item) => text.indexOf(item.prompt, answerStart))
+    .filter((index) => index >= 0)
+    .sort((left, right) => left - right)[0];
+  const answer = text
+    .slice(answerStart, nextPrompt ?? text.length)
+    .replace(/^[\s:：;；,.，。-]+/, "")
+    .trim();
+  return answer.length >= 2;
+}
+
+function resolveMetaFromContent(
+  content: string,
+  current: MetaCognition,
+): MetaCognition {
+  const next = { ...current };
+  for (const item of metaChecks) {
+    if (hasMetaResponse(content, item.prompt)) {
+      next[item.key] = item.resolvedValue;
+    }
+  }
+  return next;
+}
+
 function ClientOnly({ children }: { children: ReactNode }) {
   const ready = useSyncExternalStore(
     () => () => {},
@@ -138,12 +200,16 @@ function JournalEditor({
   const [linkedDiaryDates, setLinkedDiaryDates] = useState(
     entry?.linkedDiaryDates ?? {},
   );
-  const [metaCognition, setMetaCognition] = useState<MetaCognition>({
+  const storedMetaCognition: MetaCognition = {
     ...defaultMeta,
     ...entry?.metaCognition,
-  });
+  };
+  const [metaCognition, setMetaCognition] = useState<MetaCognition>(() =>
+    resolveMetaFromContent(content, storedMetaCognition),
+  );
   const [saved, setSaved] = useState(false);
   const [autoSavedAt, setAutoSavedAt] = useState("");
+  const [lastModifiedAt, setLastModifiedAt] = useState(entry?.updatedAt);
   const [highlightStatus, setHighlightStatus] = useState("");
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkQuery, setLinkQuery] = useState("");
@@ -173,7 +239,12 @@ function JournalEditor({
     linkedDiaryDates,
     metaCognition,
   });
-  const dirtyRef = useRef(false);
+  const dirtyRef = useRef(
+    metaChecks.some(
+      (item) =>
+        metaCognition[item.key] !== storedMetaCognition[item.key],
+    ),
+  );
 
   useEffect(() => {
     draftRef.current = {
@@ -218,8 +289,10 @@ function JournalEditor({
       void upsertDiaryRemote(draftRef.current);
       dirtyRef.current = false;
       setSaved(true);
+      const savedAt = new Date();
+      setLastModifiedAt(savedAt.toISOString());
       setAutoSavedAt(
-        new Date().toLocaleTimeString("zh-CN", {
+        savedAt.toLocaleTimeString("zh-CN", {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
@@ -244,8 +317,10 @@ function JournalEditor({
     void upsertDiaryRemote(draftRef.current);
     dirtyRef.current = false;
     setSaved(true);
+    const savedAt = new Date();
+    setLastModifiedAt(savedAt.toISOString());
     setAutoSavedAt(
-      new Date().toLocaleTimeString("zh-CN", {
+      savedAt.toLocaleTimeString("zh-CN", {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
@@ -373,7 +448,26 @@ function JournalEditor({
     setLinkDialogOpen(true);
   };
   const updateMeta = (key: keyof MetaCognition, value: boolean) => {
-    setMetaCognition((current) => ({ ...current, [key]: value }));
+    setMetaCognition((current) => {
+      const next = { ...current, [key]: value };
+      draftRef.current = { ...draftRef.current, metaCognition: next };
+      return next;
+    });
+    markDirty();
+  };
+  const metaFailedChecks = metaChecks.filter(
+    (item) => !item.passed(metaCognition[item.key]),
+  );
+  const metaPassedCount = metaChecks.length - metaFailedChecks.length;
+  const appendMetaGuidance = () => {
+    if (!metaFailedChecks.length) return;
+    const prompts = metaFailedChecks.map((item) => item.prompt).join("\n\n");
+    const addition = plainTextToRichHtml("元认知校正：\n" + prompts + "\n");
+    setContent((current) => {
+      const next = current + addition;
+      draftRef.current = { ...draftRef.current, content: next };
+      return next;
+    });
     markDirty();
   };
   const templates = [
@@ -454,6 +548,16 @@ function JournalEditor({
             {formatJournalDate(date)}
           </p>
           <h1 className="mt-1 text-2xl font-semibold">日记记录</h1>
+          {entry || lastModifiedAt ? (
+            <RecordTimestamp
+              date={date}
+              createdAt={entry?.createdAt}
+              updatedAt={lastModifiedAt}
+              className="mt-2"
+            />
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">这一天的日记尚未保存。</p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
@@ -570,7 +674,14 @@ function JournalEditor({
         <RichTextEditor
           value={content}
           onChange={(next) => {
+            const nextMeta = resolveMetaFromContent(next, metaCognition);
             setContent(next);
+            setMetaCognition(nextMeta);
+            draftRef.current = {
+              ...draftRef.current,
+              content: next,
+              metaCognition: nextMeta,
+            };
             markDirty();
           }}
           placeholder="今天发生了什么？哪些瞬间值得留下？"
@@ -618,12 +729,27 @@ function JournalEditor({
                   key={`${image}-${index}`}
                   className="relative aspect-square overflow-hidden rounded-lg border border-border"
                 >
-                  <Image
+                  <ImageLightbox
                     src={image}
                     alt={`日记图片 ${index + 1}`}
-                    fill
-                    unoptimized
-                    className="object-cover"
+                    renderTrigger={(openPreview) => (
+                      <button
+                        type="button"
+                        onClick={openPreview}
+                        aria-label={`放大查看日记图片 ${index + 1}`}
+                        className="group absolute inset-0 cursor-zoom-in"
+                      >
+                        <Image
+                          src={image}
+                          alt={`日记图片 ${index + 1}`}
+                          fill
+                          unoptimized
+                          sizes="(min-width: 640px) 33vw, 50vw"
+                          className="object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                        />
+                        <Maximize2 className="absolute bottom-2 left-2 rounded-md bg-black/55 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+                      </button>
+                    )}
                   />
                   <button
                     onClick={() => {
@@ -700,29 +826,53 @@ function JournalEditor({
           className="mt-6 border-t border-border pt-5"
         >
           <CollapsibleTrigger className="flex w-full items-center justify-between text-left font-medium text-primary">
-            <span>元认知检查</span>
+            <span className="flex items-center gap-2">
+              元认知检查
+              <Badge variant={metaPassedCount === metaChecks.length ? "default" : "secondary"}>
+                {metaPassedCount}/{metaChecks.length}
+              </Badge>
+            </span>
             <ChevronDown />
           </CollapsibleTrigger>
           <CollapsibleContent className="mt-4 flex flex-col gap-3">
-            {(
-              [
-                ["isObjective", "我今天的复盘是否客观？"],
-                ["isAvoidingCoreIssue", "我是否回避了某个核心问题？"],
-                ["isConfidentInAction", "我对改进措施有真实信心吗？"],
-              ] as const
-            ).map(([key, label]) => (
-              <label
-                key={key}
-                className="flex items-center justify-between gap-4 rounded-lg bg-secondary/35 px-3 py-2.5 text-sm"
-              >
-                <span>{label}</span>
-                <Switch
-                  checked={metaCognition[key]}
-                  onCheckedChange={(checked) => updateMeta(key, checked)}
-                  aria-label={label}
-                />
-              </label>
-            ))}
+            {metaChecks.map((item) => {
+              const passed = item.passed(metaCognition[item.key]);
+              const resolvedByAnswer = hasMetaResponse(content, item.prompt);
+              return (
+                <label
+                  key={item.key}
+                  className="flex items-center justify-between gap-4 rounded-lg bg-secondary/35 px-3 py-2.5 text-sm"
+                >
+                  <span className="min-w-0">
+                    <span className="block">{item.label}</span>
+                    <span className={passed ? "mt-1 block text-xs text-primary" : "mt-1 block text-xs text-[#a45f45]"}>
+                      {passed
+                        ? resolvedByAnswer
+                          ? "已根据你写下的具体回答自动校正"
+                          : item.passedText
+                        : item.guidance}
+                    </span>
+                  </span>
+                  <Switch
+                    checked={metaCognition[item.key]}
+                    onCheckedChange={(checked) => updateMeta(item.key, checked)}
+                    aria-label={item.label}
+                  />
+                </label>
+              );
+            })}
+            <div className={metaFailedChecks.length ? "rounded-lg border border-[#ead2c4] bg-[#fff8f3] p-3" : "rounded-lg border border-primary/15 bg-primary/5 p-3"}>
+              <p className="text-sm font-medium">
+                {metaFailedChecks.length
+                  ? `还有 ${metaFailedChecks.length} 项需要校正`
+                  : "三项检查已通过，可以保存这次复盘。"}
+              </p>
+              {metaFailedChecks.length ? (
+                <Button type="button" variant="outline" size="sm" className="mt-3" onClick={appendMetaGuidance}>
+                  将校正问题写入日记
+                </Button>
+              ) : null}
+            </div>
           </CollapsibleContent>
         </Collapsible>
       </section>

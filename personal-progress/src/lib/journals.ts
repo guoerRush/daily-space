@@ -19,6 +19,7 @@ export type JournalEntry = {
     isAvoidingCoreIssue: boolean;
     isConfidentInAction: boolean;
   };
+  createdAt?: string;
   updatedAt: string;
 };
 
@@ -65,8 +66,15 @@ export function findJournal(date: string) {
 }
 
 export function saveJournal(entry: Omit<JournalEntry, "updatedAt">) {
-  const current = listJournals().filter((item) => item.date !== entry.date);
-  const next = [{ ...entry, updatedAt: new Date().toISOString() }, ...current];
+  const entries = listJournals();
+  const existing = entries.find((item) => item.date === entry.date);
+  const current = entries.filter((item) => item.date !== entry.date);
+  const now = new Date().toISOString();
+  const next = [{
+    ...entry,
+    createdAt: entry.createdAt ?? existing?.createdAt ?? `${entry.date}T12:00:00`,
+    updatedAt: now,
+  }, ...current];
   window.localStorage.setItem(STORAGE_KEYS.journals, JSON.stringify(next));
   cachedRaw = null;
   window.dispatchEvent(new Event(STORAGE_EVENTS.journalsChanged));
@@ -91,12 +99,15 @@ export function formatJournalDate(date: string) {
   });
 }
 
-export function todayKey() {
-  const now = new Date();
-  return [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-  ].join("-");
+export function todayKey(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
 }
 import { STORAGE_EVENTS, STORAGE_KEYS } from "@/lib/storage-contract";

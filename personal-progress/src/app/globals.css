@@ -2,25 +2,25 @@
 @import "tw-animate-css";
 
 :root {
-  --radius: 0.9rem;
-  --background: oklch(0.978 0.008 116);
-  --foreground: oklch(0.255 0.025 148);
-  --card: oklch(0.995 0.003 100);
-  --card-foreground: oklch(0.255 0.025 148);
-  --popover: oklch(0.995 0.003 100);
-  --popover-foreground: oklch(0.255 0.025 148);
-  --primary: oklch(0.46 0.07 151);
-  --primary-foreground: oklch(0.995 0.003 100);
-  --secondary: oklch(0.94 0.025 143);
-  --secondary-foreground: oklch(0.3 0.035 148);
-  --muted: oklch(0.958 0.011 108);
-  --muted-foreground: oklch(0.48 0.02 145);
-  --accent: oklch(0.945 0.028 68);
-  --accent-foreground: oklch(0.36 0.045 62);
+  --radius: 0.7rem;
+  --background: oklch(0.976 0.012 174);
+  --foreground: oklch(0.29 0.028 169);
+  --card: oklch(0.995 0.006 162);
+  --card-foreground: oklch(0.29 0.028 169);
+  --popover: oklch(0.995 0.006 162);
+  --popover-foreground: oklch(0.29 0.028 169);
+  --primary: oklch(0.52 0.085 165);
+  --primary-foreground: oklch(0.99 0.008 165);
+  --secondary: oklch(0.94 0.034 211);
+  --secondary-foreground: oklch(0.34 0.045 193);
+  --muted: oklch(0.955 0.014 170);
+  --muted-foreground: oklch(0.5 0.025 168);
+  --accent: oklch(0.945 0.065 91);
+  --accent-foreground: oklch(0.38 0.05 78);
   --destructive: oklch(0.57 0.13 28);
-  --border: oklch(0.885 0.015 137);
-  --input: oklch(0.885 0.015 137);
-  --ring: oklch(0.52 0.07 151);
+  --border: oklch(0.882 0.025 174);
+  --input: oklch(0.882 0.025 174);
+  --ring: oklch(0.57 0.085 165);
 }
 
 @theme inline {
@@ -52,19 +52,131 @@
 * { box-sizing: border-box; }
 html { background: var(--background); }
 body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--font-geist-sans), "Microsoft YaHei", "PingFang SC", Arial, sans-serif; }
-h1, h2, h3, [data-slot="card-title"] { font-family: "Songti SC", "STSong", "Noto Serif SC", Georgia, serif; }
+h1, h2, h3, [data-slot="card-title"] { font-family: var(--font-geist-sans), "Microsoft YaHei", "PingFang SC", Arial, sans-serif; letter-spacing: 0; }
 button, input, select, textarea { font: inherit; }
 button:not([data-slot="button"]):not([class*="rounded-full"]), input:not([data-slot="input"]), select, textarea:not([data-slot="textarea"]) { border-radius: calc(var(--radius) + 1px); }
-button:not([data-slot="button"]):not([class*="rounded-full"])[class*="border"], button:not([data-slot="button"]):not([class*="rounded-full"])[class*="bg-"] { box-shadow: 0 3px 12px rgb(57 82 64 / 0.06); }
-button:not([data-slot="button"]):not([class*="rounded-full"])[class*="border"]:hover, button:not([data-slot="button"]):not([class*="rounded-full"])[class*="bg-"]:hover { box-shadow: 0 7px 18px rgb(57 82 64 / 0.1); }
+button:not([data-slot="button"]):not([class*="rounded-full"])[class*="border"], button:not([data-slot="button"]):not([class*="rounded-full"])[class*="bg-"] { box-shadow: 0 3px 12px rgb(51 111 101 / 0.07); }
+button:not([data-slot="button"]):not([class*="rounded-full"])[class*="border"]:hover, button:not([data-slot="button"]):not([class*="rounded-full"])[class*="bg-"]:hover { box-shadow: 0 8px 20px rgb(51 111 101 / 0.12); }
 input:not([data-slot="input"]), select, textarea:not([data-slot="textarea"]) { background-color: rgb(255 255 255 / 0.9); }
 a[class*="border"]:not([class*="rounded-full"]) { border-radius: calc(var(--radius) + 1px); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 button, a { -webkit-tap-highlight-color: transparent; }
-button:not(:disabled), a { transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease; }
-button:not(:disabled):active, a:active { opacity: 0.82; }
-[data-slot="card"] { border: 1px solid color-mix(in oklch, var(--border), white 42%); background: color-mix(in oklch, var(--card), #fffaf3 7%); box-shadow: 0 8px 24px rgb(57 82 64 / 0.045); }
-::selection { background: oklch(0.89 0.04 120); color: var(--foreground); }
+button:not(:disabled), a { transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease, transform 180ms ease; }
+button:not(:disabled):active, a:active { opacity: 0.9; transform: translateY(1px); }
+[data-slot="card"] { border: 1px solid color-mix(in oklch, var(--border), white 36%); background: color-mix(in oklch, var(--card), var(--secondary) 4%); box-shadow: 0 8px 24px rgb(49 108 99 / 0.055); }
+::selection { background: oklch(0.9 0.045 197); color: var(--foreground); }
+
+.daily-space-shell {
+  min-height: 100dvh;
+  background-color: var(--background);
+  background-image: linear-gradient(90deg, rgb(116 184 171 / 0.035) 1px, transparent 1px), linear-gradient(rgb(116 184 171 / 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.healing-hero {
+  border-color: color-mix(in oklch, var(--border), white 20%);
+  background: linear-gradient(135deg, oklch(0.96 0.033 184), oklch(0.965 0.044 93));
+  box-shadow: 0 18px 46px rgb(48 111 101 / 0.09);
+}
+
+.companion-shelf {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: auto;
+  border: 1px solid color-mix(in oklch, var(--border), white 20%);
+  border-radius: 0.65rem;
+  background: color-mix(in oklch, var(--secondary), white 52%);
+  padding: 0.75rem;
+  box-shadow: 0 8px 22px rgb(67 117 126 / 0.08);
+}
+
+.gintoki-avatar {
+  position: relative;
+  display: block;
+  width: 2.8rem;
+  height: 3rem;
+  flex: 0 0 auto;
+}
+
+.gintoki-avatar-compact {
+  margin: -0.45rem -0.35rem;
+  transform: scale(0.68);
+}
+
+.gintoki-face {
+  position: absolute;
+  left: 0.43rem;
+  top: 0.62rem;
+  width: 1.95rem;
+  height: 1.95rem;
+  border: 2px solid #52636a;
+  border-radius: 46% 46% 50% 50%;
+  background: #ffe2c7;
+}
+
+.gintoki-hair {
+  position: absolute;
+  inset: 0.08rem 0.12rem auto;
+  z-index: 2;
+  width: 2.55rem;
+  height: 1.45rem;
+  border: 2px solid #52636a;
+  border-bottom: 0;
+  border-radius: 55% 55% 22% 22%;
+  background: #eef4f5;
+  clip-path: polygon(0 75%, 10% 15%, 25% 35%, 39% 0, 54% 32%, 72% 6%, 80% 40%, 100% 18%, 91% 100%, 69% 76%, 52% 100%, 32% 73%, 14% 100%);
+}
+
+.gintoki-eye {
+  position: absolute;
+  top: 0.75rem;
+  width: 0.42rem;
+  height: 0.16rem;
+  border-top: 2px solid #52636a;
+}
+.gintoki-eye-left { left: 0.35rem; }
+.gintoki-eye-right { right: 0.35rem; }
+.gintoki-mouth { position: absolute; left: 0.77rem; bottom: 0.35rem; width: 0.4rem; border-bottom: 2px solid #b96860; }
+.gintoki-collar { position: absolute; left: 0.55rem; bottom: 0; width: 1.75rem; height: 0.75rem; border: 2px solid #52636a; border-radius: 45% 45% 12% 12%; background: #73a9c4; }
+
+.shinchan-pet-face {
+  position: absolute;
+  inset: 0.3rem 0.35rem 0.55rem;
+  border: 2px solid #3f3532;
+  border-radius: 46% 52% 48% 44%;
+  background: #ffd7b6;
+}
+
+.shinchan-pet-hair {
+  position: absolute;
+  left: 0.2rem;
+  right: 0.16rem;
+  top: 0.08rem;
+  z-index: 2;
+  height: 1.15rem;
+  border-radius: 60% 48% 24% 18%;
+  background: #352d2a;
+  transform: rotate(-4deg);
+}
+
+.shinchan-pet-brow {
+  position: absolute;
+  z-index: 3;
+  top: 1.25rem;
+  width: 0.82rem;
+  border-top: 4px solid #352d2a;
+  border-radius: 999px;
+}
+.shinchan-pet-brow-left { left: 0.75rem; transform: rotate(6deg); }
+.shinchan-pet-brow-right { right: 0.65rem; transform: rotate(-7deg); }
+.shinchan-pet-eye { position: absolute; z-index: 3; top: 1.6rem; width: 0.28rem; height: 0.36rem; border-radius: 50%; background: #352d2a; }
+.shinchan-pet-eye-left { left: 1.05rem; }
+.shinchan-pet-eye-right { right: 0.95rem; }
+.shinchan-pet-mouth { position: absolute; z-index: 3; left: 1.65rem; bottom: 1.1rem; width: 0.8rem; height: 0.42rem; border-bottom: 3px solid #bd5956; border-radius: 50%; transform: rotate(-7deg); }
+.shinchan-pet-shirt { position: absolute; inset: auto 0.7rem 0; height: 1rem; border-radius: 45% 45% 0 0; background: #e6685d; }
+.shinchan-pet-label { position: absolute; right: 3.25rem; bottom: 0.55rem; width: max-content; max-width: 8.5rem; border: 1px solid color-mix(in oklch, var(--border), white 20%); border-radius: 0.55rem; background: var(--card); padding: 0.38rem 0.55rem; color: var(--foreground); font-size: 0.7rem; font-weight: 650; opacity: 0; pointer-events: none; transform: translateX(0.35rem); box-shadow: 0 8px 20px rgb(49 108 99 / 0.12); transition: opacity 180ms ease, transform 180ms ease; }
+.group:hover .shinchan-pet-label, .group:focus-visible .shinchan-pet-label { opacity: 1; transform: translateX(0); }
 .rich-text-content { color: var(--foreground); font-size: 0.9375rem; line-height: 1.8; }
 .rich-text-content > :first-child { margin-top: 0; }
 .rich-text-content > :last-child { margin-bottom: 0; }

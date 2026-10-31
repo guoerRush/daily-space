@@ -1,0 +1,4 @@
+interface:
+  display_name: "g-web-creat"
+  short_description: "从需求规划到开发、验证与发布的个人网站和软件交付流程"
+  default_prompt: "使用 $g-web-creat 将我的网站或软件想法实现为经过验证并完成发布的产品。"

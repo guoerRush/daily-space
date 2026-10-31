@@ -26,7 +26,24 @@ export type StoredDayPlan = {
   focusSessions?: FocusSession[];
   remarkCarryoverSyncedFrom?: string;
   locked?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
+
+export function saveDailyPlan<T extends StoredDayPlan>(date: string, plan: T) {
+  const now = new Date().toISOString();
+  const next = {
+    ...plan,
+    createdAt: plan.createdAt ?? `${date}T12:00:00`,
+    updatedAt: now,
+  } satisfies StoredDayPlan;
+  window.localStorage.setItem(
+    `${STORAGE_KEYS.planPrefix}${date}`,
+    JSON.stringify(next),
+  );
+  window.dispatchEvent(new Event(STORAGE_EVENTS.plansChanged));
+  return next;
+}
 
 function remarkLines(value: string) {
   return value
@@ -70,6 +87,8 @@ export function listDailyPlans(): Array<{ date: string; plan: StoredDayPlan }> {
       const plan = JSON.parse(
         window.localStorage.getItem(key) ?? "{}",
       ) as StoredDayPlan;
+      plan.createdAt ??= `${key.slice(STORAGE_KEYS.planPrefix.length)}T12:00:00`;
+      plan.updatedAt ??= plan.createdAt;
       const hasContent = Boolean(
         plan.tasks?.some((task) => task.text.trim()) ||
         plan.planned?.some((row) => row.time || row.activity) ||
@@ -86,4 +105,4 @@ export function listDailyPlans(): Array<{ date: string; plan: StoredDayPlan }> {
   }
   return entries.sort((a, b) => b.date.localeCompare(a.date));
 }
-import { STORAGE_KEYS } from "@/lib/storage-contract";
+import { STORAGE_EVENTS, STORAGE_KEYS } from "@/lib/storage-contract";

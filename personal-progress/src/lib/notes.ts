@@ -13,6 +13,7 @@ export type Note = {
   images: string[];
   tags?: NoteTag[];
   processed?: boolean;
+  createdAt?: string;
   updatedAt: string;
 };
 
@@ -86,6 +87,17 @@ export function listNotes(category?: NoteCategory): Note[] {
       window.localStorage.getItem(STORAGE_KEYS.notes) ?? "[]",
     ) as Note[];
     return notes
+      .map((note) => {
+        const fallback = note.id >= 946_684_800_000
+          ? new Date(note.id).toISOString()
+          : "2026-01-01T12:00:00";
+        return {
+          ...note,
+          images: Array.isArray(note.images) ? note.images : [],
+          createdAt: note.createdAt ?? fallback,
+          updatedAt: note.updatedAt ?? note.createdAt ?? fallback,
+        };
+      })
       .filter((note) => !category || note.category === category)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   } catch {
@@ -96,11 +108,16 @@ export function listNotes(category?: NoteCategory): Note[] {
 export function saveNote(
   note: Omit<Note, "id" | "updatedAt"> & { id?: number },
 ) {
-  const current = listNotes().filter((item) => item.id !== note.id);
+  const entries = listNotes();
+  const existing = entries.find((item) => item.id === note.id);
+  const current = entries.filter((item) => item.id !== note.id);
+  const id = note.id ?? Date.now();
+  const now = new Date().toISOString();
   const next: Note = {
     ...note,
-    id: note.id ?? Date.now(),
-    updatedAt: new Date().toISOString(),
+    id,
+    createdAt: note.createdAt ?? existing?.createdAt ?? new Date(id).toISOString(),
+    updatedAt: now,
   };
   window.localStorage.setItem(
     STORAGE_KEYS.notes,

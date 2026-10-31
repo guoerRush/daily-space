@@ -9,6 +9,8 @@ export type SpecialDay = {
   linkedDiaryId?: string;
   note?: string;
   backgroundImage?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type SpecialDayType = {
@@ -24,20 +26,6 @@ export const defaultSpecialDayTypes: SpecialDayType[] = [
   { id: "gratitude", label: "感恩里程碑", category: "anniversary" },
   { id: "achievement", label: "成就时刻", category: "other" },
 ];
-
-export const birthdayImportPresets = [
-  { title: "一丁", month: 1, day: 13 },
-  { title: "涛", month: 2, day: 1 },
-  { title: "哥", month: 3, day: 13 },
-  { title: "扬婷（农历二月十七）", month: 4, day: 4 },
-  { title: "姑", month: 5, day: 4 },
-  { title: "妈", month: 5, day: 8 },
-  { title: "伟软", month: 5, day: 23 },
-  { title: "爸", month: 6, day: 1 },
-  { title: "三毛", month: 9, day: 29 },
-  { title: "耀娟", month: 11, day: 11 },
-  { title: "航哥", month: 11, day: 18 },
-] as const;
 
 function canUseStorage() {
   return typeof window !== "undefined";
@@ -119,56 +107,15 @@ export function listSpecialDays(): SpecialDay[] {
 }
 
 export function saveSpecialDay(day: Omit<SpecialDay, "id">) {
-  const next = { ...day, id: Date.now() };
+  const id = Date.now();
+  const now = new Date().toISOString();
+  const next = { ...day, id, createdAt: day.createdAt ?? now, updatedAt: now };
   window.localStorage.setItem(
     STORAGE_KEYS.specialDays,
     JSON.stringify([...listSpecialDays(), next]),
   );
   window.dispatchEvent(new Event(STORAGE_EVENTS.daysChanged));
   return next;
-}
-
-/** Adds the supplied birthday list once without duplicating existing annual birthdays. */
-export function importBirthdayPresets() {
-  if (!canUseStorage()) return 0;
-  const existing = listSpecialDays();
-  const existingKeys = new Set(
-    existing
-      .filter((day) => getSpecialDayType(day.type, day.category).id === "birthday")
-      .map((day) => `${day.title}:${day.date.slice(5)}`),
-  );
-  const year = new Date().getFullYear();
-  const additions = birthdayImportPresets
-    .map((item) => ({
-      ...item,
-      date: `${year}-${String(item.month).padStart(2, "0")}-${String(item.day).padStart(2, "0")}`,
-    }))
-    .filter((item) => !existingKeys.has(`${item.title}:${item.date.slice(5)}`));
-  if (!additions.length) return 0;
-
-  const ids = new Set(existing.map((day) => day.id));
-  let nextId = Date.now();
-  const imported: SpecialDay[] = additions.map((item) => {
-    while (ids.has(nextId)) nextId += 1;
-    const day: SpecialDay = {
-      id: nextId,
-      title: item.title,
-      date: item.date,
-      category: "birthday",
-      type: "birthday",
-      repeatsYearly: true,
-      note: item.title === "扬婷（农历二月十七）" ? "农历二月十七" : undefined,
-    };
-    ids.add(nextId);
-    nextId += 1;
-    return day;
-  });
-  window.localStorage.setItem(
-    STORAGE_KEYS.specialDays,
-    JSON.stringify([...existing, ...imported]),
-  );
-  window.dispatchEvent(new Event(STORAGE_EVENTS.daysChanged));
-  return imported.length;
 }
 
 export function deleteSpecialDay(id: number) {
@@ -180,11 +127,18 @@ export function deleteSpecialDay(id: number) {
 }
 
 export function updateSpecialDay(updatedDay: SpecialDay) {
+  const existing = listSpecialDays().find((day) => day.id === updatedDay.id);
+  const now = new Date().toISOString();
+  const nextDay = {
+    ...updatedDay,
+    createdAt: updatedDay.createdAt ?? existing?.createdAt ?? new Date(updatedDay.id).toISOString(),
+    updatedAt: now,
+  };
   window.localStorage.setItem(
     STORAGE_KEYS.specialDays,
     JSON.stringify(
       listSpecialDays().map((day) =>
-        day.id === updatedDay.id ? updatedDay : day,
+        day.id === updatedDay.id ? nextDay : day,
       ),
     ),
   );

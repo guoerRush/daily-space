@@ -1,18 +1,20 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, Bell, CalendarDays, CheckCircle2, Flame, PenLine } from "lucide-react";
+import { ArrowRight, Bell, CalendarDays, Flame } from "lucide-react";
 import { AppFrame } from "@/components/app-frame";
 import { AnimatedContent } from "@/components/animated-content";
 import { DashboardInsights } from "@/components/dashboard-insights";
 import { DailyHeroMessage } from "@/components/daily-hero-message";
+import { HomeTodayActions, HomeTodayDate } from "@/components/home-today-actions";
 import { HomeRecords } from "@/components/home-records";
 import { HabitProgress } from "@/components/habit-progress";
 import { MaskedHeroImage } from "@/components/masked-hero-image";
-import { TodayEventLabel } from "@/components/today-events";
-import { WeeklyInsights } from "@/components/weekly-insights";
-import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatJournalDate, todayKey } from "@/lib/journals";
+import { todayKey } from "@/lib/journals";
+
+// The dashboard includes the current day, so it must be rendered per request
+// instead of being frozen into the static build at deployment time.
+export const dynamic = "force-dynamic";
 
 export default function Home() {
   const today = todayKey();
@@ -21,25 +23,12 @@ export default function Home() {
     <AppFrame>
       <div className="mx-auto max-w-6xl">
         <AnimatedContent>
-          <section className="relative overflow-hidden rounded-xl border border-[#d5e2d4] bg-[#edf5ea] px-5 py-6 shadow-[0_12px_28px_rgba(57,82,64,0.055)] md:px-8 md:py-8">
-            <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full border-[18px] border-white/35" />
+          <section className="healing-hero relative overflow-hidden rounded-lg border px-5 py-6 md:px-8 md:py-8">
             <div className="relative flex flex-wrap items-end justify-between gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_19rem]">
               <div className="max-w-xl">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <p className="text-sm font-medium text-[#4b725c]">{formatJournalDate(today)}</p>
-                  <TodayEventLabel />
-                </div>
+                <HomeTodayDate initialDate={today} />
                 <DailyHeroMessage />
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button size="lg" render={<Link href={`/journals/${today}`} />}>
-                    <PenLine data-icon="inline-start" />
-                    写今日日记
-                  </Button>
-                  <Button size="lg" variant="outline" className="border-[#bbd0c0] bg-white/70" render={<Link href="/plan" />}>
-                    <CheckCircle2 data-icon="inline-start" />
-                    今日安排
-                  </Button>
-                </div>
+                <HomeTodayActions initialDate={today} />
               </div>
               <MaskedHeroImage className="hidden w-full max-w-[19rem] justify-self-end lg:block" />
             </div>
@@ -48,7 +37,6 @@ export default function Home() {
         <AnimatedContent delay={0.05}><DashboardInsights /></AnimatedContent>
         <AnimatedContent delay={0.1}><HomeRecords /></AnimatedContent>
         <HabitProgress />
-        <WeeklyInsights />
         <AnimatedContent delay={0.05}>
           <section className="hidden">
             <QuickLink href="/calendar" icon={<CalendarDays size={19} strokeWidth={1.8} />} title="按日期回顾" description="查看每一天的记录、安排与重要日子。" />

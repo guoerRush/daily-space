@@ -223,8 +223,8 @@ async function writeIncomingMessage(userId: string, message: FeishuMessage) {
     const match = command.content.match(/^(\d{4}-\d{2}-\d{2})\s+(.+)$/);
     if (match) {
       const key = "daily-space:special-days";
-      const current = readArray<{ id: number; title: string; date: string; category: "anniversary" | "birthday" | "other"; repeatsYearly: boolean }>(records, key);
-      writeArray(records, key, [...current, { id: Date.now(), date: match[1], title: match[2].trim(), category: "anniversary", repeatsYearly: false }]);
+      const current = readArray<{ id: number; title: string; date: string; category: "anniversary" | "birthday" | "other"; repeatsYearly: boolean; createdAt?: string; updatedAt?: string }>(records, key);
+      writeArray(records, key, [...current, { id: Date.now(), date: match[1], title: match[2].trim(), category: "anniversary", repeatsYearly: false, createdAt: updatedAt, updatedAt }]);
       await upsertRecords(userId, records, updatedAt);
     }
     return;
@@ -234,8 +234,8 @@ async function writeIncomingMessage(userId: string, message: FeishuMessage) {
     const match = command.content.match(/^(\d{2}:\d{2})(?:\s+([\s\S]+))?$/);
     if (match && Number(match[1].slice(0, 2)) < 24 && Number(match[1].slice(3)) < 60) {
       const key = "daily-space:feishu-reminders";
-      const current = readArray<{ id: string; time: string; message: string; enabled: boolean }>(records, key);
-      writeArray(records, key, [...current, { id: crypto.randomUUID(), time: match[1], message: match[2]?.trim() || "\u8bb0\u5f55\u4eca\u5929\u7684\u751f\u6d3b\u4e0e\u53cd\u601d", enabled: true }]);
+      const current = readArray<{ id: string; time: string; message: string; enabled: boolean; createdAt?: string; updatedAt?: string }>(records, key);
+      writeArray(records, key, [...current, { id: crypto.randomUUID(), time: match[1], message: match[2]?.trim() || "\u8bb0\u5f55\u4eca\u5929\u7684\u751f\u6d3b\u4e0e\u53cd\u601d", enabled: true, createdAt: updatedAt, updatedAt }]);
       await upsertRecords(userId, records, updatedAt);
     }
     return;
@@ -243,7 +243,7 @@ async function writeIncomingMessage(userId: string, message: FeishuMessage) {
 
   if (command.target === "journal") {
     const key = "daily-space:journals";
-    const current = readArray<{ date: string; content: string; mood: string; images?: string[]; updatedAt: string }>(records, key);
+    const current = readArray<{ date: string; content: string; mood: string; images?: string[]; createdAt?: string; updatedAt: string }>(records, key);
     const date = beijingDate();
     const old = current.find((entry) => entry.date === date);
     const next = {
@@ -251,6 +251,7 @@ async function writeIncomingMessage(userId: string, message: FeishuMessage) {
       content: [old?.content, command.content].filter(Boolean).join(old?.content ? "\n" : ""),
       mood: old?.mood || "\u5e73\u9759",
       images: [...(old?.images || []), ...images],
+      createdAt: old?.createdAt ?? updatedAt,
       updatedAt,
     };
     writeArray(records, key, [next, ...current.filter((entry) => entry.date !== date)]);
@@ -258,11 +259,11 @@ async function writeIncomingMessage(userId: string, message: FeishuMessage) {
     const key = `daily-space:plan:${beijingDate()}`;
     const existing = parseJson(records[key]) as { tasks?: Array<{ id: number; text: string; priority: number; done: boolean }> };
     const tasks = Array.isArray(existing.tasks) ? existing.tasks : [];
-    records[key] = JSON.stringify({ ...existing, tasks: [...tasks, { id: Date.now(), text: command.content || "\u6765\u81ea\u98de\u4e66\u7684\u5f85\u529e", priority: tasks.length + 1, done: false }] });
+    records[key] = JSON.stringify({ ...existing, createdAt: (existing as { createdAt?: string }).createdAt ?? updatedAt, updatedAt, tasks: [...tasks, { id: Date.now(), text: command.content || "\u6765\u81ea\u98de\u4e66\u7684\u5f85\u529e", priority: tasks.length + 1, done: false }] });
   } else {
     const key = "daily-space:notes";
-    const current = readArray<{ id: number; category: string; title: string; content: string; images: string[]; updatedAt: string }>(records, key);
-    writeArray(records, key, [{ id: Date.now(), category: command.target, title: noteTitle(command.content), content: command.content, images, updatedAt }, ...current]);
+    const current = readArray<{ id: number; category: string; title: string; content: string; images: string[]; createdAt?: string; updatedAt: string }>(records, key);
+    writeArray(records, key, [{ id: Date.now(), category: command.target, title: noteTitle(command.content), content: command.content, images, createdAt: updatedAt, updatedAt }, ...current]);
   }
 
   await upsertRecords(userId, records, updatedAt);

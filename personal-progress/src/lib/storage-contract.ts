@@ -7,6 +7,7 @@ export type StorageAdapter = Pick<
 
 export const STORAGE_KEYS = {
   cognitiveSettings: "daily-space:cognitive-settings",
+  completionHistory: "daily-space:completion-history",
   feishuBindingCode: "daily-space:feishu-binding-code",
   feishuOpenId: "daily-space:feishu-open-id",
   feishuReminders: "daily-space:feishu-reminders",
@@ -21,10 +22,12 @@ export const STORAGE_KEYS = {
   specialDays: "daily-space:special-days",
   specialDayTypes: "daily-space:special-day-types",
   successJournals: "daily-space:success-journals",
+  weeklyReviews: "daily-space:weekly-reviews",
 } as const;
 
 export const STORAGE_EVENTS = {
   cognitiveSettingsChanged: "daily-space:cognitive-settings-changed",
+  completionHistoryChanged: "daily-space:completion-history-changed",
   daysChanged: "daily-space:days-changed",
   dayTypesChanged: "daily-space:day-types-changed",
   feishuRemindersChanged: "daily-space:feishu-reminders-changed",
@@ -37,10 +40,12 @@ export const STORAGE_EVENTS = {
   plansChanged: "daily-space:plans-changed",
   reminderChanged: "daily-space:reminder-changed",
   successJournalsChanged: "daily-space:success-journals-changed",
+  weeklyReviewsChanged: "daily-space:weekly-reviews-changed",
 } as const;
 
 export const STORAGE_CHANGE_EVENTS = Object.freeze([
   STORAGE_EVENTS.cognitiveSettingsChanged,
+  STORAGE_EVENTS.completionHistoryChanged,
   STORAGE_EVENTS.daysChanged,
   STORAGE_EVENTS.dayTypesChanged,
   STORAGE_EVENTS.feishuRemindersChanged,
@@ -52,6 +57,7 @@ export const STORAGE_CHANGE_EVENTS = Object.freeze([
   STORAGE_EVENTS.plansChanged,
   STORAGE_EVENTS.reminderChanged,
   STORAGE_EVENTS.successJournalsChanged,
+  STORAGE_EVENTS.weeklyReviewsChanged,
 ]);
 
 /** Includes unknown daily-space keys so future features are backed up by default. */
