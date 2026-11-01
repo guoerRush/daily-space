@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  CalendarDays,
   Check,
   ChevronDown,
   ChevronUp,
@@ -148,6 +149,16 @@ function previousDateKey(date: string) {
   const previous = new Date(`${date}T12:00:00`);
   previous.setDate(previous.getDate() - 1);
   return [previous.getFullYear(), String(previous.getMonth() + 1).padStart(2, "0"), String(previous.getDate()).padStart(2, "0")].join("-");
+}
+
+function nextDateKey(date: string) {
+  const next = new Date(`${date}T12:00:00`);
+  next.setDate(next.getDate() + 1);
+  return [
+    next.getFullYear(),
+    String(next.getMonth() + 1).padStart(2, "0"),
+    String(next.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 function syncUnfinishedRemarksFromYesterday(date: string, currentPlan: DayPlan) {
@@ -406,13 +417,13 @@ function PlanWorkspace() {
   const save = () => {
     if (missingRequiredTerms.length) {
       setMessage(
-        `保存前请在今日安排中加入“复习”和“反思”事项。当前缺少：${missingRequiredTerms.join("、")}。`,
+        `保存前请在当前安排中加入“复习”和“反思”事项。当前缺少：${missingRequiredTerms.join("、")}。`,
       );
       return;
     }
     const next = { ...plan, locked: true };
     setPlan(saveDailyPlan(date, next));
-    setMessage("今日安排已保存并锁定。需要调整时点击“修改”。");
+    setMessage("当前安排已保存并锁定。需要调整时点击“修改”。");
   };
   const unlock = () => {
     setPlan((current) => {
@@ -562,98 +573,14 @@ function PlanWorkspace() {
     }
     update({ actual: plan.actual.filter((item) => item.id !== row.id) });
   };
-  const carryUnfinishedToTomorrow = () => {
-    const unfinished = plan.tasks.filter(
-      (task) => task.text.trim() && !task.done,
-    );
-    const completedActivities = new Set(
-      plan.actual.map((row) => row.activity.trim()).filter(Boolean),
-    );
-    const pendingTimeBlocks = plan.planned.filter(
-      (row) =>
-        row.activity.trim() && !completedActivities.has(row.activity.trim()),
-    );
-    const nextDate = new Date(`${date}T12:00:00`);
-    nextDate.setDate(nextDate.getDate() + 1);
-    const tomorrow = [
-      nextDate.getFullYear(),
-      String(nextDate.getMonth() + 1).padStart(2, "0"),
-      String(nextDate.getDate()).padStart(2, "0"),
-    ].join("-");
-    const tomorrowPlan = getPlan(tomorrow);
-    if (tomorrowPlan.locked) {
-      setMessage("明日安排已锁定，未覆盖其中内容。");
-      return;
-    }
-    const tomorrowRemarkItems = buildRemarkItems(
-      tomorrowPlan.remarks,
-      tomorrowPlan.remarkChecks,
-    );
-    const remarkAdditions = remarkItems.filter(
-      (item) =>
-        !item.done &&
-        !tomorrowRemarkItems.some(
-          (tomorrowItem) => tomorrowItem.text === item.text,
-        ),
-    );
-    const nextRemarks = remarkAdditions.length
-      ? `${tomorrowPlan.remarks.trim()}${tomorrowPlan.remarks.trim() ? "<p></p>" : ""}${remarkItemsToHtml(remarkAdditions)}`
-      : tomorrowPlan.remarks;
-    const existingTasks = new Set(
-      tomorrowPlan.tasks.map((task) => task.text.trim()),
-    );
-    const taskAdditions = unfinished
-      .filter((task) => !existingTasks.has(task.text.trim()))
-      .map((task, index) => ({
-        id: createPlanItemId(),
-        text: task.text,
-        priority: tomorrowPlan.tasks.length + index + 1,
-        done: false,
-      }));
-    const existingBlocks = new Set(
-      tomorrowPlan.planned.map(
-        (row) => `${row.time.trim()}|${row.activity.trim()}`,
-      ),
-    );
-    const blockAdditions = pendingTimeBlocks
-      .filter(
-        (row) =>
-          !existingBlocks.has(`${row.time.trim()}|${row.activity.trim()}`),
-      )
-      .map((row) => ({
-        id: createPlanItemId(),
-        time: row.time,
-        activity: row.activity,
-      }));
-    if (
-      !taskAdditions.length &&
-      !blockAdditions.length &&
-      !remarkAdditions.length
-    ) {
-      setMessage("未完成待办和未执行时间段都已在明日安排中。");
-      return;
-    }
-    saveDailyPlan(tomorrow, {
-      ...tomorrowPlan,
-      tasks: [...tomorrowPlan.tasks, ...taskAdditions],
-      planned: [...tomorrowPlan.planned, ...blockAdditions],
-      remarks: nextRemarks,
-      remarkChecks: tomorrowPlan.remarkChecks,
-    });
-    const details = [
-      `${taskAdditions.length} 项未完成待办`,
-      `${blockAdditions.length} 个未执行时间段`,
-      remarkAdditions.length ? `${remarkAdditions.length} 条未完成备注` : "",
-    ]
-      .filter(Boolean)
-      .filter((item) => !item.startsWith("0"));
-    setMessage(
-      `已将${details.join("和")}带入 ${tomorrow}，不会覆盖明日已有内容。`,
-    );
-  };
   const weekday = new Date(`${date}T12:00:00`).toLocaleDateString("zh-CN", {
     weekday: "long",
   });
+  const planHeading = date === todayKey()
+    ? "今日安排"
+    : date === nextDateKey(todayKey())
+      ? "明天计划"
+      : `${date}计划`;
   const divider = {
     "--plan-divider": locked ? "#b9d7c0" : "#bd6879",
   } as CSSProperties;
@@ -663,7 +590,7 @@ function PlanWorkspace() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm text-[#65736a]">每日填写 · 草稿自动保存</p>
-          <h1 className="mt-1 text-2xl font-semibold md:text-3xl">今日安排</h1>
+          <h1 className="mt-1 text-2xl font-semibold md:text-3xl">{planHeading}</h1>
           <RecordTimestamp
             date={date}
             createdAt={plan.createdAt}
@@ -676,10 +603,10 @@ function PlanWorkspace() {
             type="button"
             variant="outline"
             size="lg"
-            onClick={carryUnfinishedToTomorrow}
+            onClick={() => changeDate(nextDateKey(date))}
           >
-            <Plus data-icon="inline-start" />
-            带入明天
+            <CalendarDays data-icon="inline-start" />
+            明天计划
           </Button>
           {locked ? (
             <>
