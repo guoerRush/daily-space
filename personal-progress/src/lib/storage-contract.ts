@@ -18,6 +18,7 @@ export const STORAGE_KEYS = {
   notes: "daily-space:notes",
   place: "daily-space:place",
   planPrefix: "daily-space:plan:",
+  weeklyPrioritiesPrefix: "daily-space:weekly-goals:",
   reminderSettings: "daily-space:reminder-settings",
   specialDays: "daily-space:special-days",
   specialDayTypes: "daily-space:special-day-types",

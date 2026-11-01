@@ -1,7 +1,11 @@
 import type { JournalEntry } from "@/lib/journals";
 import { listJournals } from "@/lib/journals";
 import type { StoredDayPlan } from "@/lib/plans";
-import { buildRemarkItems, listDailyPlans } from "@/lib/plans";
+import {
+  buildRemarkItems,
+  listDailyPlans,
+  loadWeeklyPriorities,
+} from "@/lib/plans";
 import type { SuccessJournal } from "@/lib/success-journals";
 import { listSuccessJournals } from "@/lib/success-journals";
 import {
@@ -37,11 +41,13 @@ type WeeklySources = {
   journals: JournalEntry[];
   successes: SuccessJournal[];
   plans: Array<{ date: string; plan: StoredDayPlan }>;
+  weeklyPriorities: string[];
 };
 
 type WeeklyReviewMaterial = {
   weekStart: string;
   weekEnd: string;
+  weeklyPriorities: string[];
   dailySummaries: Array<{ date: string; text: string }>;
   successJournals: Array<{ date: string; text: string }>;
   dailyPlans: Array<{
@@ -60,6 +66,7 @@ function loadWeeklySources(weekStart: string, weekEnd: string): WeeklySources {
     journals: listJournals().filter((entry) => inRange(entry.date, weekStart, weekEnd)),
     successes: listSuccessJournals().filter((entry) => inRange(entry.date, weekStart, weekEnd)),
     plans: listDailyPlans().filter((entry) => inRange(entry.date, weekStart, weekEnd)),
+    weeklyPriorities: loadWeeklyPriorities(weekStart).priorities.filter((item) => item.trim()),
   };
 }
 
@@ -171,7 +178,13 @@ function sourceLines(sources: WeeklySources) {
     ...htmlToLines(plan.dictation),
     ...(plan.topPriorities ?? []),
   ].map((line) => line.trim()).filter(Boolean));
-  return { journalLines, successLines, planLines, all: [...journalLines, ...successLines, ...planLines] };
+  const weeklyPriorityLines = sources.weeklyPriorities.map((line) => line.trim()).filter(Boolean);
+  return {
+    journalLines,
+    successLines,
+    planLines,
+    all: [...journalLines, ...successLines, ...weeklyPriorityLines, ...planLines],
+  };
 }
 
 function createTextBudget(total: number) {
@@ -221,6 +234,7 @@ function buildWeeklyReviewMaterial(
   return {
     weekStart,
     weekEnd,
+    weeklyPriorities: sources.weeklyPriorities,
     dailySummaries: sources.journals.map((entry) => ({
       date: entry.date,
       text: takeJournal(plainRecordText([

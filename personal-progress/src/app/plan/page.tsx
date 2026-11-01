@@ -42,9 +42,12 @@ import { listJournals, todayKey } from "@/lib/journals";
 import { cn } from "@/lib/utils";
 import {
   buildRemarkItems,
+  getWeekRange,
+  loadWeeklyPriorities,
   listDailyPlans,
   remarkItemsToHtml,
   saveDailyPlan,
+  saveWeeklyPriorities,
   type FocusSession,
   type StoredDayPlan,
 } from "@/lib/plans";
@@ -264,6 +267,9 @@ function PlanWorkspace() {
   const [plan, setPlan] = useState<DayPlan>(() =>
     loadPlanWithYesterdayRemarks(initialDate),
   );
+  const [weeklyPriorities, setWeeklyPriorities] = useState<[string, string, string]>(() =>
+    loadWeeklyPriorities(getWeekRange(initialDate).weekStart).priorities,
+  );
   const [message, setMessage] = useState("");
   const [showAllPastPlans, setShowAllPastPlans] = useState(false);
   const [focusTaskId, setFocusTaskId] = useState<number | null>(null);
@@ -302,6 +308,7 @@ function PlanWorkspace() {
     (total, session) => total + session.minutes,
     0,
   );
+  const weekRange = getWeekRange(date);
   const showEveningSummary = date === todayKey() && new Date().getHours() >= 20;
 
   useEffect(() => {
@@ -357,8 +364,18 @@ function PlanWorkspace() {
   const changeDate = (nextDate: string) => {
     setDate(nextDate);
     setPlan(loadPlanWithYesterdayRemarks(nextDate));
+    setWeeklyPriorities(loadWeeklyPriorities(getWeekRange(nextDate).weekStart).priorities);
     setMessage("");
     setFocusTaskId(null);
+  };
+  const updateWeeklyPriority = (index: number, value: string) => {
+    if (locked) return;
+    setWeeklyPriorities((current) => {
+      const next = [...current] as [string, string, string];
+      next[index] = value;
+      saveWeeklyPriorities(getWeekRange(date).weekStart, next);
+      return next;
+    });
   };
   const addTask = () =>
     update({
@@ -723,17 +740,17 @@ function PlanWorkspace() {
         <section className="border-b-2 border-[var(--plan-divider)] bg-[#f4f8f3] px-5 py-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="font-semibold text-[#315944]">今日三件要事</h2>
+              <h2 className="font-semibold text-[#315944]">本周目标</h2>
               <p className="mt-1 text-sm text-[#718077]">
-                只保留最重要的三件事，让注意力有明确去处。
+                只保留本周最重要的三件事，今天填上后每天都能继续推进。
               </p>
             </div>
             <span className="text-xs text-[#718077]">
-              会高亮显示在计划清单上方
+              本周：{weekRange.weekStart} 至 {weekRange.weekEnd}
             </span>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {plan.topPriorities.map((item, index) => (
+            {weeklyPriorities.map((item, index) => (
               <label
                 key={index}
                 className="flex items-center gap-2 border border-[#cbdacb] bg-white px-3 py-2.5 text-sm"
@@ -745,15 +762,9 @@ function PlanWorkspace() {
                   value={item}
                   disabled={locked}
                   onChange={(event) => {
-                    const next = [...plan.topPriorities] as [
-                      string,
-                      string,
-                      string,
-                    ];
-                    next[index] = event.target.value;
-                    update({ topPriorities: next });
+                    updateWeeklyPriority(index, event.target.value);
                   }}
-                  placeholder={`第 ${index + 1} 件最重要的事`}
+                  placeholder={`本周第 ${index + 1} 件最重要的事`}
                   className="min-w-0 flex-1 bg-transparent outline-none disabled:text-[#718077]"
                 />
               </label>
