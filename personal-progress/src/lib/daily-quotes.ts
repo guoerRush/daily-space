@@ -1,11 +1,11 @@
 export type DailyQuote = {
-  source: "海贼王" | "银魂" | "毛选";
+  source: "海贼王" | "银魂" | "毛选" | "道德经";
   quote: string;
 };
 
-// Keep the lines short enough for the narrow banner and rotate by local date.
-// The date-based index keeps a refresh stable while changing automatically the
-// next day. The three source groups are intentionally mixed in one pool.
+// Keep the lines short enough for the narrow banner. The date and time-period
+// index keeps a refresh stable, changes at noon, and uses different slots for
+// the top banner and the companion shelf.
 const quotes: DailyQuote[] = [
   { source: "海贼王", quote: "我要成为海贼王！" },
   { source: "海贼王", quote: "人的梦想，是不会终结的。" },
@@ -88,6 +88,86 @@ const quotes: DailyQuote[] = [
   { source: "银魂", quote: "守住底线之后，才有资格谈自由。" },
   { source: "银魂", quote: "走得慢一点没关系，别把同行的人弄丢了。" },
 
+  { source: "道德经", quote: "道可道，非常道；名可名，非常名。" },
+  { source: "道德经", quote: "无名，天地之始；有名，万物之母。" },
+  { source: "道德经", quote: "故常无欲，以观其妙；常有欲，以观其徼。" },
+  { source: "道德经", quote: "此两者同出而异名，同谓之玄。" },
+  { source: "道德经", quote: "玄之又玄，众妙之门。" },
+  { source: "道德经", quote: "上善若水。水善利万物而不争。" },
+  { source: "道德经", quote: "处众人之所恶，故几于道。" },
+  { source: "道德经", quote: "居善地，心善渊，与善仁，言善信。" },
+  { source: "道德经", quote: "政善治，事善能，动善时。" },
+  { source: "道德经", quote: "夫唯不争，故无尤。" },
+  { source: "道德经", quote: "持而盈之，不如其已。" },
+  { source: "道德经", quote: "揣而锐之，不可长保。" },
+  { source: "道德经", quote: "金玉满堂，莫之能守。" },
+  { source: "道德经", quote: "富贵而骄，自遗其咎。" },
+  { source: "道德经", quote: "功成名遂身退，天之道。" },
+  { source: "道德经", quote: "载营魄抱一，能无离乎？" },
+  { source: "道德经", quote: "专气致柔，能如婴儿乎？" },
+  { source: "道德经", quote: "涤除玄览，能无疵乎？" },
+  { source: "道德经", quote: "爱民治国，能无知乎？" },
+  { source: "道德经", quote: "天门开阖，能为雌乎？" },
+  { source: "道德经", quote: "明白四达，能无为乎？" },
+  { source: "道德经", quote: "生之、畜之，生而不有，为而不恃。" },
+  { source: "道德经", quote: "长而不宰，是谓玄德。" },
+  { source: "道德经", quote: "三十辐，共一毂，当其无，有车之用。" },
+  { source: "道德经", quote: "有之以为利，无之以为用。" },
+  { source: "道德经", quote: "五色令人目盲，五音令人耳聋。" },
+  { source: "道德经", quote: "五味令人口爽，驰骋畋猎令人心发狂。" },
+  { source: "道德经", quote: "是以圣人为腹不为目，故去彼取此。" },
+  { source: "道德经", quote: "宠辱若惊，贵大患若身。" },
+  { source: "道德经", quote: "视之不见，名曰夷；听之不闻，名曰希。" },
+  { source: "道德经", quote: "搏之不得，名曰微。此三者不可致诘。" },
+  { source: "道德经", quote: "执古之道，以御今之有。" },
+  { source: "道德经", quote: "古之善为士者，微妙玄通，深不可识。" },
+  { source: "道德经", quote: "豫兮若冬涉川，犹兮若畏四邻。" },
+  { source: "道德经", quote: "敦兮其若朴，旷兮其若谷。" },
+  { source: "道德经", quote: "孰能浊以静之徐清？孰能安以动之徐生？" },
+  { source: "道德经", quote: "保此道者不欲盈，夫唯不盈，故能蔽而新成。" },
+  { source: "道德经", quote: "致虚极，守静笃。万物并作，吾以观复。" },
+  { source: "道德经", quote: "夫物芸芸，各复归其根。归根曰静，是谓复命。" },
+  { source: "道德经", quote: "天地所以能长且久者，以其不自生，故能长生。" },
+  { source: "道德经", quote: "是以圣人后其身而身先，外其身而身存。" },
+  { source: "道德经", quote: "非以其无私邪？故能成其私。" },
+  { source: "道德经", quote: "天下皆知美之为美，斯恶已。" },
+  { source: "道德经", quote: "皆知善之为善，斯不善已。" },
+  { source: "道德经", quote: "有无相生，难易相成，长短相形。" },
+  { source: "道德经", quote: "高下相倾，音声相和，前后相随。" },
+  { source: "道德经", quote: "是以圣人处无为之事，行不言之教。" },
+  { source: "道德经", quote: "为无为，则无不治。" },
+  { source: "道德经", quote: "吾有三宝，持而保之：一曰慈，二曰俭。" },
+  { source: "道德经", quote: "三曰不敢为天下先。" },
+  { source: "道德经", quote: "慈故能勇，俭故能广。" },
+  { source: "道德经", quote: "不敢为天下先，故能成器长。" },
+  { source: "道德经", quote: "知人者智，自知者明；胜人者有力，自胜者强。" },
+  { source: "道德经", quote: "知足者富，强行者有志。" },
+  { source: "道德经", quote: "不失其所者久，死而不亡者寿。" },
+  { source: "道德经", quote: "大成若缺，其用不弊；大盈若冲，其用不穷。" },
+  { source: "道德经", quote: "大直若屈，大巧若拙，大辩若讷。" },
+  { source: "道德经", quote: "清静为天下正。" },
+  { source: "道德经", quote: "轻诺必寡信，多易必多难。" },
+  { source: "道德经", quote: "图难于其易，为大于其细。" },
+  { source: "道德经", quote: "天下难事必作于易，天下大事必作于细。" },
+  { source: "道德经", quote: "合抱之木，生于毫末；九层之台，起于累土。" },
+  { source: "道德经", quote: "千里之行，始于足下。" },
+  { source: "道德经", quote: "为者败之，执者失之。" },
+  { source: "道德经", quote: "是以圣人无为故无败，无执故无失。" },
+  { source: "道德经", quote: "人法地，地法天，天法道，道法自然。" },
+  { source: "道德经", quote: "重为轻根，静为躁君。" },
+  { source: "道德经", quote: "物壮则老，是谓不道，不道早已。" },
+  { source: "道德经", quote: "知足不辱，知止不殆，可以长久。" },
+  { source: "道德经", quote: "大道废，有仁义；智慧出，有大伪。" },
+  { source: "道德经", quote: "见素抱朴，少私寡欲。" },
+  { source: "道德经", quote: "绝学无忧。" },
+  { source: "道德经", quote: "小国寡民，使有什伯之器而不用。" },
+  { source: "道德经", quote: "甘其食，美其服，安其居，乐其俗。" },
+  { source: "道德经", quote: "邻国相望，鸡犬之声相闻，民至老死不相往来。" },
+  { source: "道德经", quote: "信言不美，美言不信；善者不辩，辩者不善。" },
+  { source: "道德经", quote: "知者不博，博者不知。" },
+  { source: "道德经", quote: "圣人不积，既以为人己愈有，既以与人己愈多。" },
+  { source: "道德经", quote: "天之道，利而不害；圣人之道，为而不争。" },
+
   { source: "毛选", quote: "没有调查，没有发言权。" },
   { source: "毛选", quote: "星星之火，可以燎原。" },
   { source: "毛选", quote: "一切反动派都是纸老虎。" },
@@ -136,7 +216,12 @@ function dayNumber(date: Date) {
   );
 }
 
+function periodNumber(date: Date) {
+  return date.getHours() < 12 ? 0 : 1;
+}
+
 export function dailyQuoteForDate(date = new Date(), slot = 0) {
-  const index = (dayNumber(date) * 7 + slot * 13) % quotes.length;
+  const index =
+    (dayNumber(date) * 7 + periodNumber(date) * 13 + slot * 17) % quotes.length;
   return quotes[(index + quotes.length) % quotes.length];
 }
