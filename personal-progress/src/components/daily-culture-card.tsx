@@ -8,7 +8,7 @@ import { cultureForDate } from "@/lib/daily-culture";
 
 export function DailyCultureCard({ initialDate }: { initialDate: string }) {
   const date = useTodayKey(initialDate);
-  const { title, quote, imageUrl, sourceUrl, isFilm } = cultureForDate(date);
+  const { title, quote, translation, imageUrl, sourceUrl, isFilm } = cultureForDate(date);
   const [failedImage, setFailedImage] = useState<string>();
   const Icon = isFilm ? Film : BookOpen;
   const credit = isFilm ? "TMDB 剧照" : "Project Gutenberg";
@@ -46,10 +46,10 @@ export function DailyCultureCard({ initialDate }: { initialDate: string }) {
         <blockquote className="mt-1 break-words text-sm leading-relaxed text-muted-foreground" lang="en">
           “{quote}”
         </blockquote>
-        {isFilm && (
-          <small className="mt-2 block text-[10px] leading-snug text-muted-foreground" lang="en">
-            This product uses TMDB data but is not endorsed or certified by TMDB.
-          </small>
+        {translation && (
+          <p className="mt-2 text-sm leading-relaxed text-foreground" lang="zh-CN">
+            {translation}
+          </p>
         )}
       </figcaption>
     </figure>

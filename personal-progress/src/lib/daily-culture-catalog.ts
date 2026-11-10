@@ -1,8 +1,8 @@
 // TMDB backdrop filenames are paired with their own movie gallery.
 // Gutenberg IDs identify the exact cover and edition used for each excerpt.
 
-const filmEntries = [
-  ["157336-interstellar","vgnoBSVzWAV9sNQUORaDGvDp7wx.jpg","星际穿越","Love is the one thing we're capable of perceiving that transcends dimensions of time and space."],
+const filmEntries: ReadonlyArray<readonly [slug: string, image: string, title: string, quote: string, translation?: string]> = [
+  ["157336-interstellar","vgnoBSVzWAV9sNQUORaDGvDp7wx.jpg","星际穿越","Love is the one thing we're capable of perceiving that transcends dimensions of time and space.","爱是我们唯一能感知到的、能够超越时间和空间维度的东西。"],
   ["278-the-shawshank-redemption","pNjh59JSxChQktamG3LMp9ZoQzp.jpg","肖申克的救赎","Get busy living, or get busy dying."],
   ["238-the-godfather","tSPT36ZKlP2WVHJLM4cQPLSzv3b.jpg","教父","I'm gonna make him an offer he can't refuse."],
   ["240-the-godfather-part-ii","pGzqRKrYeK4LogoysNro0vG8d8N.jpg","教父2","Keep your friends close, but your enemies closer."],
@@ -232,9 +232,10 @@ const bookEntries = [
   ["1041","莎士比亚十四行诗","Shall I compare thee to a summer's day?"],
 ] as const;
 
-export const films = filmEntries.map(([slug, image, title, quote]) => ({
+export const films = filmEntries.map(([slug, image, title, quote, translation]) => ({
   title,
   quote,
+  translation,
   imageUrl: `https://image.tmdb.org/t/p/w780/${image}`,
   sourceUrl: `https://www.themoviedb.org/movie/${slug}/images/backdrops`,
 }));
@@ -242,6 +243,7 @@ export const films = filmEntries.map(([slug, image, title, quote]) => ({
 export const books = bookEntries.map(([id, title, quote]) => ({
   title,
   quote,
+  translation: undefined,
   imageUrl: `https://www.gutenberg.org/cache/epub/${id}/pg${id}.cover.medium.jpg`,
   sourceUrl: `https://www.gutenberg.org/ebooks/${id}`,
 }));
