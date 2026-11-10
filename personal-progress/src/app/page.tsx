@@ -8,7 +8,7 @@ import { DailyHeroMessage } from "@/components/daily-hero-message";
 import { HomeTodayActions, HomeTodayDate } from "@/components/home-today-actions";
 import { HomeRecords } from "@/components/home-records";
 import { HabitProgress } from "@/components/habit-progress";
-import { MaskedHeroImage } from "@/components/masked-hero-image";
+import { DailyCultureCard } from "@/components/daily-culture-card";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { todayKey } from "@/lib/journals";
 
@@ -30,7 +30,7 @@ export default function Home() {
                 <DailyHeroMessage />
                 <HomeTodayActions initialDate={today} />
               </div>
-              <MaskedHeroImage className="hidden w-full max-w-[19rem] justify-self-end lg:block" />
+              <DailyCultureCard initialDate={today} />
             </div>
           </section>
         </AnimatedContent>
