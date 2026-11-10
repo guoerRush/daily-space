@@ -5,6 +5,7 @@ import { AppFrame } from "@/components/app-frame";
 import { AnimatedContent } from "@/components/animated-content";
 import { DashboardInsights } from "@/components/dashboard-insights";
 import { DailyHeroMessage } from "@/components/daily-hero-message";
+import { DailyPersonStory } from "@/components/daily-person-story";
 import { HomeTodayActions, HomeTodayDate } from "@/components/home-today-actions";
 import { HomeRecords } from "@/components/home-records";
 import { HabitProgress } from "@/components/habit-progress";
@@ -26,6 +27,7 @@ export default function Home() {
           <section className="healing-hero relative overflow-hidden rounded-lg border px-5 py-6 md:px-8 md:py-8">
             <div className="relative flex flex-wrap items-end justify-between gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_19rem]">
               <div className="max-w-xl">
+                <DailyPersonStory initialDate={today} />
                 <HomeTodayDate initialDate={today} />
                 <DailyHeroMessage />
                 <HomeTodayActions initialDate={today} />
