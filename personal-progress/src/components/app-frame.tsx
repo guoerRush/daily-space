@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { Bell, BookOpen, CalendarDays, CalendarHeart, ClipboardList, LayoutDashboard, LogOut, Settings, StickyNote, Target } from "lucide-react";
+import { Bell, BookOpen, CalendarDays, CalendarHeart, ClipboardList, Dumbbell, LayoutDashboard, LogOut, Settings, StickyNote, Target } from "lucide-react";
 import { AuthGate } from "@/components/auth-gate";
 import { CloudRecordSync } from "@/components/cloud-record-sync";
 import { CompanionShelf } from "@/components/companion-shelf";
@@ -24,6 +24,7 @@ const navigation = [
   { href: "/journals", label: "复盘手记", icon: BookOpen },
   { href: "/notes", label: "闲思札记", icon: StickyNote },
   { href: "/plan", label: "当日计划", icon: ClipboardList },
+  { href: "/fitness", label: "健身", icon: Dumbbell },
   { href: "/goals", label: "目标与习惯", icon: Target },
 ];
 

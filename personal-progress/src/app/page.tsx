@@ -10,7 +10,6 @@ import { HomeTodayActions, HomeTodayDate } from "@/components/home-today-actions
 import { HomeRecords } from "@/components/home-records";
 import { HabitProgress } from "@/components/habit-progress";
 import { DailyCultureCard } from "@/components/daily-culture-card";
-import { FitnessModule } from "@/components/fitness-module";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { todayKey } from "@/lib/journals";
 
@@ -38,7 +37,6 @@ export default function Home() {
           </section>
         </AnimatedContent>
         <AnimatedContent delay={0.05}><DashboardInsights /></AnimatedContent>
-        <FitnessModule initialDate={today} />
         <AnimatedContent delay={0.1}><HomeRecords /></AnimatedContent>
         <HabitProgress />
         <AnimatedContent delay={0.05}>
