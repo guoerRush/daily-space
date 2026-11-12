@@ -11,6 +11,7 @@ import {
   dispatchStorageChanges,
   replaceStoredRecords,
   sanitizeStoredRecords,
+  STORAGE_KEYS,
   storedRecordsEqual,
   type StorageAdapter,
   type StoredRecords,
@@ -405,6 +406,12 @@ export class RecordSynchronizer {
       {},
     );
     const mergedRecords = mergeRecoveredRecords(localRecords, remoteRecords);
+    // The habits array is edited as a complete list. Merging array items here
+    // would bring deleted habits back from an older cloud snapshot during the
+    // first sync after a device or account switch.
+    if (localRecords[STORAGE_KEYS.habits] !== undefined) {
+      mergedRecords[STORAGE_KEYS.habits] = localRecords[STORAGE_KEYS.habits];
+    }
     const mergedMetadata = emptyMetadata();
     const now = this.now().toISOString();
     for (const [key, value] of Object.entries(mergedRecords)) {
