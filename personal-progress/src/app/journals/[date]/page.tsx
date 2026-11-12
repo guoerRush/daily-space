@@ -144,6 +144,38 @@ function resolveMetaFromContent(
   return next;
 }
 
+function compressJournalImage(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("图片读取失败，请重新选择。"));
+    reader.onload = () => {
+      const image = new window.Image();
+      image.onerror = () => reject(new Error("图片处理失败，请换一张图片。"));
+      image.onload = () => {
+        const maxSide = 1800;
+        const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("当前浏览器无法处理这张图片。"));
+          return;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+        if (dataUrl.length > 2_500_000) {
+          reject(new Error("图片处理后仍过大，请选择尺寸更小的图片。"));
+          return;
+        }
+        resolve(dataUrl);
+      };
+      image.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function ClientOnly({ children }: { children: ReactNode }) {
   const ready = useSyncExternalStore(
     () => () => {},
@@ -208,6 +240,8 @@ function JournalEditor({
     resolveMetaFromContent(content, storedMetaCognition),
   );
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [imageMessage, setImageMessage] = useState("");
   const [autoSavedAt, setAutoSavedAt] = useState("");
   const [lastModifiedAt, setLastModifiedAt] = useState(entry?.updatedAt);
   const [highlightStatus, setHighlightStatus] = useState("");
@@ -285,19 +319,18 @@ function JournalEditor({
   useEffect(() => {
     const persist = () => {
       if (!dirtyRef.current) return;
-      saveJournal(draftRef.current);
-      void upsertDiaryRemote(draftRef.current);
-      dirtyRef.current = false;
-      setSaved(true);
-      const savedAt = new Date();
-      setLastModifiedAt(savedAt.toISOString());
-      setAutoSavedAt(
-        savedAt.toLocaleTimeString("zh-CN", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }),
-      );
+      try {
+        saveJournal(draftRef.current);
+        void upsertDiaryRemote(draftRef.current);
+        dirtyRef.current = false;
+        setSaveError("");
+        setSaved(true);
+        const savedAt = new Date();
+        setLastModifiedAt(savedAt.toISOString());
+        setAutoSavedAt(savedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      } catch {
+        setSaveError("保存失败，图片可能超过浏览器存储容量，请减少图片数量或尺寸后重试。");
+      }
     };
     const timer = window.setInterval(persist, 3_000);
     window.addEventListener("pagehide", persist);
@@ -313,19 +346,18 @@ function JournalEditor({
     setSaved(false);
   };
   const save = () => {
-    saveJournal(draftRef.current);
-    void upsertDiaryRemote(draftRef.current);
-    dirtyRef.current = false;
-    setSaved(true);
-    const savedAt = new Date();
-    setLastModifiedAt(savedAt.toISOString());
-    setAutoSavedAt(
-      savedAt.toLocaleTimeString("zh-CN", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      }),
-    );
+    try {
+      saveJournal(draftRef.current);
+      void upsertDiaryRemote(draftRef.current);
+      dirtyRef.current = false;
+      setSaveError("");
+      setSaved(true);
+      const savedAt = new Date();
+      setLastModifiedAt(savedAt.toISOString());
+      setAutoSavedAt(savedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    } catch {
+      setSaveError("保存失败，图片可能超过浏览器存储容量，请减少图片数量或尺寸后重试。");
+    }
   };
   const insertTemplate = (text: string) => {
     setContent(
@@ -339,18 +371,14 @@ function JournalEditor({
     Promise.all(
       Array.from(files)
         .filter((file) => file.type.startsWith("image/"))
-        .map(
-          (file) =>
-            new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(String(reader.result));
-              reader.readAsDataURL(file);
-            }),
-        ),
+        .map((file) => compressJournalImage(file)),
     ).then((items) => {
-      setImages((current) => [...current, ...items]);
+      const nextImages = [...(draftRef.current.images ?? []), ...items];
+      draftRef.current = { ...draftRef.current, images: nextImages };
+      setImages(nextImages);
+      setImageMessage("");
       markDirty();
-    });
+    }).catch((error: unknown) => setImageMessage(error instanceof Error ? error.message : "图片读取失败，请重试。"));
   };
   const createHighlights = () => {
     const next = extractHighlights(richTextToPlainText(content));
@@ -573,6 +601,7 @@ function JournalEditor({
           </Button>
         </div>
       </div>
+      {saveError ? <p role="alert" className="mt-3 text-sm text-destructive">{saveError}</p> : null}
 
       <section className="mt-7 rounded-xl border border-border bg-card p-4 sm:p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -753,9 +782,9 @@ function JournalEditor({
                   />
                   <button
                     onClick={() => {
-                      setImages((current) =>
-                        current.filter((_, itemIndex) => itemIndex !== index),
-                      );
+                      const nextImages = (draftRef.current.images ?? []).filter((_, itemIndex) => itemIndex !== index);
+                      draftRef.current = { ...draftRef.current, images: nextImages };
+                      setImages(nextImages);
                       markDirty();
                     }}
                     aria-label="移除图片"
@@ -767,6 +796,7 @@ function JournalEditor({
               ))}
             </div>
           ) : null}
+          {imageMessage ? <p role="alert" className="mt-3 text-sm text-destructive">{imageMessage}</p> : null}
         </div>
 
         <div id="reflection" className="mt-6 border-t border-border pt-5">
