@@ -38,6 +38,37 @@ function readRecords(value: unknown): WellnessRecord[] {
   return value.filter((item): item is WellnessRecord => Boolean(item && typeof item === "object" && typeof (item as WellnessRecord).date === "string"));
 }
 
+function parseAppleHealthXml(xml: string): WellnessRecord[] {
+  const document = new DOMParser().parseFromString(xml, "application/xml");
+  if (document.querySelector("parsererror") || !document.querySelector("HealthData")) throw new Error("这不是有效的 Apple 健康 export.xml 文件。");
+  const byDate = new Map<string, WellnessRecord>();
+  const getRecord = (date: string) => {
+    const existing = byDate.get(date) ?? emptyRecord(date);
+    byDate.set(date, existing);
+    return existing;
+  };
+  document.querySelectorAll("Record").forEach((node) => {
+    const type = node.getAttribute("type") ?? "";
+    const date = (node.getAttribute("startDate") ?? "").slice(0, 10);
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) return;
+    const record = getRecord(date);
+    const value = Number(node.getAttribute("value"));
+    if (type === "HKQuantityTypeIdentifierStepCount" && Number.isFinite(value)) record.steps = String(Math.round(Number(record.steps || 0) + value));
+    if (type === "HKQuantityTypeIdentifierActiveEnergyBurned" && Number.isFinite(value)) record.calories = String(Math.round(Number(record.calories || 0) + value));
+    if (type === "HKQuantityTypeIdentifierHeartRate" && Number.isFinite(value)) {
+      const samples = Number(record.heartRate.split("|")[1] || 0) + 1;
+      const total = Number(record.heartRate.split("|")[0] || 0) + value;
+      record.heartRate = `${total}|${samples}`;
+    }
+    if (type === "HKCategoryTypeIdentifierSleepAnalysis" && (node.getAttribute("value") ?? "").includes("Asleep")) {
+      const start = Date.parse(node.getAttribute("startDate") ?? "");
+      const end = Date.parse(node.getAttribute("endDate") ?? "");
+      if (Number.isFinite(start) && Number.isFinite(end) && end > start) record.sleepHours = String(Number((Number(record.sleepHours || 0) + (end - start) / 3_600_000).toFixed(1)));
+    }
+  });
+  return [...byDate.values()].map((record) => ({ ...record, heartRate: record.heartRate.includes("|") ? String(Math.round(Number(record.heartRate.split("|")[0]) / Number(record.heartRate.split("|")[1]))) : record.heartRate, source: "Apple 健康 export.xml", updatedAt: new Date().toISOString() }));
+}
+
 export default function StatusPage() {
   const [records, setRecords] = useState<WellnessRecord[]>([]);
   const [draft, setDraft] = useState<WellnessRecord>(() => emptyRecord());
@@ -88,6 +119,24 @@ export default function StatusPage() {
     reader.readAsText(file);
   }
 
+  function importAppleHealth(file: File | undefined) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const imported = parseAppleHealthXml(String(reader.result));
+        const merged = [...imported, ...records].reduce<WellnessRecord[]>((all, record) => all.some((item) => item.date === record.date) ? all : [...all, record], []).sort((left, right) => right.date.localeCompare(left.date));
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        setRecords(merged);
+        setDraft(merged.find((record) => record.date === todayKey()) ?? emptyRecord());
+        setMessage(`已导入 Apple 健康 ${imported.length} 天数据。`);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Apple 健康文件导入失败。");
+      }
+    };
+    reader.readAsText(file);
+  }
+
   return <AppFrame>
     <div className="mx-auto max-w-6xl">
       <p className="text-sm text-muted-foreground">心率、睡眠、压力与活动数据</p>
@@ -101,10 +150,10 @@ export default function StatusPage() {
       <section className="mt-5 rounded-xl border border-border bg-card p-5 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">记录每日状态</h2><p className="mt-1 text-sm text-muted-foreground">填写小米运动健康中的当天数据，保存后会带日期归档。</p></div><span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays size={14} />当前日期 {draft.date}</span></div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><label className="text-sm font-medium">日期<input type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} className="mt-2 block w-full border border-input bg-background px-3 py-2" /></label>{fields.map(([key, label, unit]) => <label key={key} className="text-sm font-medium">{label}<span className="ml-1 text-xs font-normal text-muted-foreground">({unit})</span><input inputMode="decimal" value={draft[key]} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} className="mt-2 block w-full border border-input bg-background px-3 py-2" placeholder="未填写" /></label>)}</div>
-        <div className="mt-5 flex flex-wrap items-center gap-3"><button type="button" onClick={saveRecord} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"><Save size={16} />保存今日状态</button><label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-secondary"><CloudUpload size={16} />导入 JSON<input type="file" accept="application/json,.json" className="sr-only" onChange={(event) => importRecords(event.target.files?.[0])} /></label>{message ? <span role="status" className="text-sm text-primary">{message}</span> : null}</div>
+        <div className="mt-5 flex flex-wrap items-center gap-3"><button type="button" onClick={saveRecord} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"><Save size={16} />保存今日状态</button><label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-secondary"><CloudUpload size={16} />导入 JSON<input type="file" accept="application/json,.json" className="sr-only" onChange={(event) => importRecords(event.target.files?.[0])} /></label><label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-secondary"><HeartPulse size={16} />导入 Apple 健康 XML<input type="file" accept="application/xml,.xml" className="sr-only" onChange={(event) => importAppleHealth(event.target.files?.[0])} /></label>{message ? <span role="status" className="text-sm text-primary">{message}</span> : null}</div>
       </section>
 
-      <section className="mt-5 rounded-xl border border-border bg-card p-5 md:p-6"><div className="flex items-center gap-2 text-primary"><ShieldCheck size={19} /><h2 className="font-semibold">小米运动健康同步</h2></div><p className="mt-3 text-sm leading-6 text-muted-foreground">小米官方提供运动健康数据服务，但需要开发者应用完成小米账号授权、服务开通和权限审批。当前页面已准备好每日数据记录与 JSON 导入入口，自动同步需要配置你的小米开放平台应用凭证。</p><div className="mt-4 flex flex-wrap gap-3"><a href="https://dev.mi.com/xiaomihyperos/documentation/detail?pId=2333" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-md border border-primary px-4 py-2 text-sm font-medium text-primary">查看小米授权文档<RefreshCw size={15} /></a><span className="inline-flex items-center rounded-md bg-secondary px-3 py-2 text-xs text-muted-foreground">等待授权配置</span></div></section>
+      <section className="mt-5 rounded-xl border border-border bg-card p-5 md:p-6"><div className="flex items-center gap-2 text-primary"><ShieldCheck size={19} /><h2 className="font-semibold">健康数据来源</h2></div><p className="mt-3 text-sm leading-6 text-muted-foreground">Apple 健康数据需要由 iPhone 原生应用通过 HealthKit 授权读取，网页无法直接访问 HealthKit。你可以在“健康”App 中导出数据，解压后导入 export.xml。小米运动健康支持官方云端 API，自动同步需要开发者应用授权。</p><div className="mt-4 flex flex-wrap gap-3"><a href="https://developer.apple.com/documentation/healthkit/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-md border border-primary px-4 py-2 text-sm font-medium text-primary">查看 Apple HealthKit 文档<RefreshCw size={15} /></a><a href="https://dev.mi.com/xiaomihyperos/documentation/detail?pId=2333" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm text-muted-foreground">查看小米授权文档<RefreshCw size={15} /></a></div></section>
 
       <section className="mt-5 rounded-xl border border-border bg-card p-5 md:p-6"><h2 className="font-semibold">历史状态</h2>{records.length ? <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="border-b border-border text-muted-foreground"><tr><th className="px-2 py-2">日期</th>{fields.map(([, label]) => <th key={label} className="px-2 py-2">{label}</th>)}</tr></thead><tbody>{records.slice(0, 30).map((record) => <tr key={record.date} className="border-b border-border/60"><td className="px-2 py-3 font-medium">{record.date}</td>{fields.map(([key, , unit]) => <td key={key} className="px-2 py-3 text-muted-foreground">{record[key] || "—"} {record[key] ? unit : ""}</td>)}</tr>)}</tbody></table></div> : <p className="mt-4 text-sm text-muted-foreground">保存第一条状态数据后，这里会显示每日历史。</p>}</section>
     </div>
