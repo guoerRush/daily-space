@@ -39,35 +39,61 @@ function readRecords(value: unknown): WellnessRecord[] {
   return value.filter((item): item is WellnessRecord => Boolean(item && typeof item === "object" && typeof (item as WellnessRecord).date === "string"));
 }
 
-function parseAppleHealthXml(xml: string): WellnessRecord[] {
-  const document = new DOMParser().parseFromString(xml, "application/xml");
-  if (document.querySelector("parsererror") || !document.querySelector("HealthData")) throw new Error("这不是有效的 Apple 健康 export.xml 文件。");
-  const byDate = new Map<string, WellnessRecord>();
-  const getRecord = (date: string) => {
-    const existing = byDate.get(date) ?? emptyRecord(date);
-    byDate.set(date, existing);
-    return existing;
-  };
-  document.querySelectorAll("Record").forEach((node) => {
-    const type = node.getAttribute("type") ?? "";
-    const date = (node.getAttribute("startDate") ?? "").slice(0, 10);
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) return;
-    const record = getRecord(date);
-    const value = Number(node.getAttribute("value"));
-    if (type === "HKQuantityTypeIdentifierStepCount" && Number.isFinite(value)) record.steps = String(Math.round(Number(record.steps || 0) + value));
-    if (type === "HKQuantityTypeIdentifierActiveEnergyBurned" && Number.isFinite(value)) record.calories = String(Math.round(Number(record.calories || 0) + value));
-    if (type === "HKQuantityTypeIdentifierHeartRate" && Number.isFinite(value)) {
-      const samples = Number(record.heartRate.split("|")[1] || 0) + 1;
-      const total = Number(record.heartRate.split("|")[0] || 0) + value;
-      record.heartRate = `${total}|${samples}`;
-    }
-    if (type === "HKCategoryTypeIdentifierSleepAnalysis" && (node.getAttribute("value") ?? "").includes("Asleep")) {
-      const start = Date.parse(node.getAttribute("startDate") ?? "");
-      const end = Date.parse(node.getAttribute("endDate") ?? "");
-      if (Number.isFinite(start) && Number.isFinite(end) && end > start) record.sleepHours = String(Number((Number(record.sleepHours || 0) + (end - start) / 3_600_000).toFixed(1)));
-    }
-  });
+function attribute(tag: string, name: string) {
+  return tag.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+}
+
+function addAppleRecord(byDate: Map<string, WellnessRecord>, tag: string) {
+  const type = attribute(tag, "type");
+  const date = attribute(tag, "startDate").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const record = byDate.get(date) ?? emptyRecord(date);
+  byDate.set(date, record);
+  const value = Number(attribute(tag, "value"));
+  if (type === "HKQuantityTypeIdentifierStepCount" && Number.isFinite(value)) record.steps = String(Math.round(Number(record.steps || 0) + value));
+  if (type === "HKQuantityTypeIdentifierActiveEnergyBurned" && Number.isFinite(value)) record.calories = String(Math.round(Number(record.calories || 0) + value));
+  if (type === "HKQuantityTypeIdentifierHeartRate" && Number.isFinite(value)) {
+    const samples = Number(record.heartRate.split("|")[1] || 0) + 1;
+    const total = Number(record.heartRate.split("|")[0] || 0) + value;
+    record.heartRate = `${total}|${samples}`;
+  }
+  if (type === "HKCategoryTypeIdentifierSleepAnalysis" && (attribute(tag, "value")).includes("Asleep")) {
+    const start = Date.parse(attribute(tag, "startDate"));
+    const end = Date.parse(attribute(tag, "endDate"));
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) record.sleepHours = String(Number((Number(record.sleepHours || 0) + (end - start) / 3_600_000).toFixed(1)));
+  }
+}
+
+function finishAppleRecords(byDate: Map<string, WellnessRecord>) {
   return [...byDate.values()].map((record) => ({ ...record, heartRate: record.heartRate.includes("|") ? String(Math.round(Number(record.heartRate.split("|")[0]) / Number(record.heartRate.split("|")[1]))) : record.heartRate, source: "Apple 健康 export.xml", updatedAt: new Date().toISOString() }));
+}
+
+async function parseAppleHealthFile(file: File): Promise<WellnessRecord[]> {
+  if (!file.name.toLowerCase().endsWith(".xml")) throw new Error("请选择解压后的 export.xml 文件。");
+  const byDate = new Map<string, WellnessRecord>();
+  const reader = file.stream().getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const next = await reader.read();
+    buffer += decoder.decode(next.value, { stream: !next.done });
+    let start = buffer.search(/<Record\b/i);
+    while (start >= 0) {
+      const end = buffer.indexOf("/>", start);
+      if (end < 0) {
+        buffer = buffer.slice(start);
+        break;
+      }
+      addAppleRecord(byDate, buffer.slice(start, end + 2));
+      buffer = buffer.slice(end + 2);
+      start = buffer.search(/<Record\b/i);
+    }
+    if (next.done) break;
+    if (buffer.length > 2_000_000) buffer = buffer.slice(-200_000);
+  }
+  const result = finishAppleRecords(byDate);
+  if (!result.length) throw new Error("没有读取到 Apple 健康记录，请选择包含健康数据的 export.xml。");
+  return result;
 }
 
 export default function StatusPage() {
@@ -120,22 +146,19 @@ export default function StatusPage() {
     reader.readAsText(file);
   }
 
-  function importAppleHealth(file: File | undefined) {
+  async function importAppleHealth(file: File | undefined) {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const imported = parseAppleHealthXml(String(reader.result));
-        const merged = [...imported, ...records].reduce<WellnessRecord[]>((all, record) => all.some((item) => item.date === record.date) ? all : [...all, record], []).sort((left, right) => right.date.localeCompare(left.date));
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-        setRecords(merged);
-        setDraft(merged.find((record) => record.date === todayKey()) ?? emptyRecord());
-        setMessage(`已导入 Apple 健康 ${imported.length} 天数据。`);
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Apple 健康文件导入失败。");
-      }
-    };
-    reader.readAsText(file);
+    setMessage("正在读取 Apple 健康文件，请保持页面打开……");
+    try {
+      const imported = await parseAppleHealthFile(file);
+      const merged = [...imported, ...records].reduce<WellnessRecord[]>((all, record) => all.some((item) => item.date === record.date) ? all : [...all, record], []).sort((left, right) => right.date.localeCompare(left.date));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      setRecords(merged);
+      setDraft(merged.find((record) => record.date === todayKey()) ?? emptyRecord());
+      setMessage(`已导入 Apple 健康 ${imported.length} 天数据。`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Apple 健康文件导入失败。");
+    }
   }
 
   return <AppFrame>
