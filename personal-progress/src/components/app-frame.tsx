@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { Bell, BookOpen, CalendarDays, CalendarHeart, ClipboardList, Dumbbell, LayoutDashboard, LogOut, Settings, StickyNote, Target } from "lucide-react";
+import { Activity, Bell, BookOpen, CalendarDays, CalendarHeart, ClipboardList, Dumbbell, LayoutDashboard, LogOut, Settings, StickyNote, Target } from "lucide-react";
 import { AuthGate } from "@/components/auth-gate";
 import { CloudRecordSync } from "@/components/cloud-record-sync";
 import { CompanionShelf } from "@/components/companion-shelf";
@@ -19,13 +19,14 @@ import { getSupabaseClient } from "@/lib/supabase";
 
 const navigation = [
   { href: "/", label: "全景看板", icon: LayoutDashboard },
-  { href: "/calendar", label: "日程", icon: CalendarDays },
-  { href: "/days", label: "纪念日倒计时", icon: CalendarHeart },
-  { href: "/journals", label: "复盘手记", icon: BookOpen },
-  { href: "/notes", label: "闲思札记", icon: StickyNote },
-  { href: "/plan", label: "当日计划", icon: ClipboardList },
   { href: "/fitness", label: "健身", icon: Dumbbell },
+  { href: "/plan", label: "当日计划", icon: ClipboardList },
+  { href: "/journals", label: "复盘手记", icon: BookOpen },
   { href: "/goals", label: "目标与习惯", icon: Target },
+  { href: "/days", label: "纪念日倒计时", icon: CalendarHeart },
+  { href: "/notes", label: "闲思札记", icon: StickyNote },
+  { href: "/calendar", label: "日程", icon: CalendarDays },
+  { href: "/status", label: "状态", icon: Activity },
 ];
 
 export function AppFrame({ children, compactContent = false }: { children: ReactNode; compactContent?: boolean }) {

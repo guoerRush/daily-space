@@ -725,6 +725,7 @@ function GoalCard({
   const [editing, setEditing] = useState(false);
   const [editLabel, setEditLabel] = useState(goal.label);
   const [editType, setEditType] = useState(goal.type);
+  const [editStatus, setEditStatus] = useState<NonNullable<Goal["status"]>>(goal.status ?? (goal.done ? "completed" : "active"));
   const [editAbility, setEditAbility] = useState(goal.ability ?? 5);
   const [editDifficulty, setEditDifficulty] = useState(goal.difficulty ?? 5);
   const [editImage, setEditImage] = useState(goal.backgroundImage ?? "");
@@ -754,6 +755,7 @@ function GoalCard({
   const openEditor = () => {
     setEditLabel(goal.label);
     setEditType(goal.type);
+    setEditStatus(goal.status ?? (goal.done ? "completed" : "active"));
     setEditAbility(goal.ability ?? 5);
     setEditDifficulty(goal.difficulty ?? 5);
     setEditImage(goal.backgroundImage ?? "");
@@ -777,6 +779,8 @@ function GoalCard({
       ...goal,
       label,
       type: editType,
+      status: editStatus,
+      done: editStatus === "completed",
       ability: editAbility,
       difficulty: editDifficulty,
       backgroundImage: editImage || undefined,
@@ -916,12 +920,20 @@ function GoalCard({
               className="mt-2 block w-full border border-input bg-background px-3 py-2 text-sm"
             />
           </label>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             <label className="text-sm font-medium text-foreground">
               目标类型
               <select value={editType} onChange={(event) => setEditType(event.target.value as Goal["type"])} className="mt-2 block w-full border border-input bg-background px-3 py-2 text-sm">
                 <option value="short">短期目标</option>
                 <option value="long">长期目标</option>
+              </select>
+            </label>
+            <label className="text-sm font-medium text-foreground">
+              目标状态
+              <select value={editStatus} onChange={(event) => setEditStatus(event.target.value as NonNullable<Goal["status"]>)} className="mt-2 block w-full border border-input bg-background px-3 py-2 text-sm">
+                <option value="active">进行中</option>
+                <option value="completed">已完成</option>
+                <option value="expired">已过期</option>
               </select>
             </label>
             <label className="text-sm font-medium text-foreground">
