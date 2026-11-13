@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { uploadPhoto } from "@/lib/photo-upload";
 import Image from "next/image";
 import Link from "next/link";
 import { CalendarHeart, Gift, ImagePlus, Maximize2, Pencil, Plus, Trash2, X } from "lucide-react";
@@ -41,20 +42,6 @@ function ClientOnly({ children }: { children: ReactNode }) {
   return ready ? <>{children}</> : null;
 }
 
-async function readBackgroundImage(file: File) {
-  if (!file.type.startsWith("image/")) {
-    throw new Error("请选择图片文件。");
-  }
-  if (file.size > 8 * 1024 * 1024) {
-    throw new Error("图片请控制在 8MB 以内。");
-  }
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("图片读取失败，请重新选择。"));
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(file);
-  });
-}
 
 export default function DaysPage() {
   return (
@@ -136,7 +123,7 @@ function DaysWorkspace() {
     const file = files?.[0];
     if (!file) return;
     try {
-      setImage(await readBackgroundImage(file));
+      setImage(await uploadPhoto(file));
       setImageMessage("");
     } catch (error) {
       setImageMessage(error instanceof Error ? error.message : "图片读取失败，请重试。");

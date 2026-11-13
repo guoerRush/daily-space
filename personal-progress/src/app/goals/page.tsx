@@ -1,5 +1,6 @@
 "use client";
 
+import { uploadPhoto } from "@/lib/photo-upload";
 import Image from "next/image";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import {
@@ -136,23 +137,6 @@ function daysInMonth(month: Date) {
   );
 }
 
-async function readGoalBackgroundImage(file: File) {
-  if (!file.type.startsWith("image/")) throw new Error("请选择图片文件。");
-  if (file.size > 10 * 1024 * 1024) throw new Error("图片请控制在 10MB 以内。");
-
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("当前浏览器无法处理这张图片。");
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
-  if (dataUrl.length > 2_500_000) throw new Error("图片处理后仍过大，请选择尺寸更小的图片。");
-  return dataUrl;
-}
 
 export default function GoalsPage() {
   return (
@@ -264,7 +248,7 @@ function GoalsWorkspace() {
     const file = files?.[0];
     if (!file) return;
     try {
-      setImage(await readGoalBackgroundImage(file));
+      setImage(await uploadPhoto(file));
       setGoalImageMessage("");
     } catch (error) {
       setGoalImageMessage(error instanceof Error ? error.message : "图片读取失败，请重试。");
@@ -766,7 +750,7 @@ function GoalCard({
     const file = files?.[0];
     if (!file) return;
     try {
-      setEditImage(await readGoalBackgroundImage(file));
+      setEditImage(await uploadPhoto(file));
       setEditImageMessage("");
     } catch (error) {
       setEditImageMessage(error instanceof Error ? error.message : "图片读取失败，请重试。");

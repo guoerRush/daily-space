@@ -17,6 +17,7 @@ import {
   type StoredRecords,
 } from "@/lib/storage-contract";
 import { mergeRecoveredRecords } from "@/lib/record-backup";
+import { migrateFitnessHistory } from "@/lib/fitness-history";
 
 const REMOTE_METADATA_KEY = "__daily_space_sync_metadata__";
 const SYNC_VERSION = 1;
@@ -201,6 +202,7 @@ export class RecordSynchronizer {
   async start() {
     const previousVisibleRecords = collectStoredRecords(this.storage);
     activateAccountStorage(this.storage, this.userId);
+    migrateFitnessHistory(this.storage);
     if (
       !storedRecordsEqual(
         previousVisibleRecords,

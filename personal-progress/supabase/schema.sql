@@ -152,3 +152,8 @@ using (auth.uid() = user_id);
 insert into storage.buckets (id, name, public)
 values ('feishu-imports', 'feishu-imports', false)
 on conflict (id) do update set public = false;
+
+-- Photo uploads require a verified session and are written by the server.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('user-photos', 'user-photos', false, 3145728, array['image/jpeg'])
+on conflict (id) do nothing;

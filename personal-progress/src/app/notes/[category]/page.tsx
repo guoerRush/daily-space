@@ -1,5 +1,7 @@
 "use client";
 
+import { uploadPhoto } from "@/lib/photo-upload";
+
 import Link from "next/link";
 import Image from "next/image";
 import { useParams } from "next/navigation";
@@ -162,19 +164,17 @@ function NotesEditor({ category }: { category: NoteCategory }) {
 
   const addImages = (files: FileList | null) => {
     if (!files) return;
-    Promise.all(
-      Array.from(files)
-        .filter((file) => file.type.startsWith("image/"))
-        .map(
-          (file) =>
-            new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(String(reader.result));
-              reader.readAsDataURL(file);
-            }),
-        ),
-    ).then((items) => setImages((current) => [...current, ...items]));
+    setMessage("正在上传照片，请稍候…");
+    Promise.all(Array.from(files).filter((file) => file.type.startsWith("image/")).map(uploadPhoto))
+      .then((items) => {
+        const nextImages = [...draftRef.current.images, ...items];
+        draftRef.current = { ...draftRef.current, images: nextImages };
+        setImages(nextImages);
+        setMessage("照片已上传");
+      })
+      .catch((error: unknown) => setMessage(error instanceof Error ? error.message : "照片上传失败。"));
   };
+
   const save = () => {
     if (!title.trim() && !richTextToPlainText(content) && !images.length) {
       setMessage("请至少写下标题、内容或添加一张图片。");

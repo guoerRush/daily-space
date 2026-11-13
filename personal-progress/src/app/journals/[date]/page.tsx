@@ -1,4 +1,6 @@
 "use client";
+import { uploadPhoto } from "@/lib/photo-upload";
+
 
 import Link from "next/link";
 import Image from "next/image";
@@ -142,38 +144,6 @@ function resolveMetaFromContent(
     }
   }
   return next;
-}
-
-function compressJournalImage(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("图片读取失败，请重新选择。"));
-    reader.onload = () => {
-      const image = new window.Image();
-      image.onerror = () => reject(new Error("图片处理失败，请换一张图片。"));
-      image.onload = () => {
-        const maxSide = 1800;
-        const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-        const context = canvas.getContext("2d");
-        if (!context) {
-          reject(new Error("当前浏览器无法处理这张图片。"));
-          return;
-        }
-        context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
-        if (dataUrl.length > 2_500_000) {
-          reject(new Error("图片处理后仍过大，请选择尺寸更小的图片。"));
-          return;
-        }
-        resolve(dataUrl);
-      };
-      image.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
-  });
 }
 
 function ClientOnly({ children }: { children: ReactNode }) {
@@ -368,10 +338,11 @@ function JournalEditor({
   };
   const addImages = (files: FileList | null) => {
     if (!files) return;
+    setImageMessage("正在上传照片，请稍候…");
     Promise.all(
       Array.from(files)
         .filter((file) => file.type.startsWith("image/"))
-        .map((file) => compressJournalImage(file)),
+        .map((file) => uploadPhoto(file)),
     ).then((items) => {
       const nextImages = [...(draftRef.current.images ?? []), ...items];
       draftRef.current = { ...draftRef.current, images: nextImages };

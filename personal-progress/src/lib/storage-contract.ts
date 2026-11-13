@@ -27,6 +27,7 @@ export const STORAGE_KEYS = {
 } as const;
 
 export const STORAGE_EVENTS = {
+  fitnessChanged: "daily-space:fitness-changed",
   cognitiveSettingsChanged: "daily-space:cognitive-settings-changed",
   completionHistoryChanged: "daily-space:completion-history-changed",
   daysChanged: "daily-space:days-changed",
@@ -45,6 +46,7 @@ export const STORAGE_EVENTS = {
 } as const;
 
 export const STORAGE_CHANGE_EVENTS = Object.freeze([
+  STORAGE_EVENTS.fitnessChanged,
   STORAGE_EVENTS.cognitiveSettingsChanged,
   STORAGE_EVENTS.completionHistoryChanged,
   STORAGE_EVENTS.daysChanged,
