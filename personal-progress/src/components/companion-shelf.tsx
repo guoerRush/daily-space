@@ -25,9 +25,14 @@ export function CompanionShelf() {
       <GintokiAvatar />
       <span className="min-w-0">
         <strong className="block text-xs font-semibold text-foreground">{quote.source}</strong>
-        <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">
+        <span className={quote.source === "道德经" ? "mt-1 block text-sm leading-5 text-muted-foreground" : "mt-1 block text-[11px] leading-4 text-muted-foreground"}>
           {quote.quote}
         </span>
+        {quote.source === "道德经" && (
+          <small className="mt-1 block break-words text-xs leading-relaxed text-muted-foreground">
+            释义：{quote.explanation}
+          </small>
+        )}
       </span>
     </section>
   );
