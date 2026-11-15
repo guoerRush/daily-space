@@ -72,6 +72,7 @@ import {
 import { getSupabaseClient } from "@/lib/supabase";
 import { upsertDiaryRemote } from "@/lib/diary-supabase";
 import { extractHighlights } from "@/lib/reflection";
+import { STORAGE_EVENTS } from "@/lib/storage-contract";
 
 type Template = NonNullable<JournalEntry["template"]>;
 type MetaCognition = NonNullable<JournalEntry["metaCognition"]>;
@@ -291,6 +292,37 @@ function JournalEditor({
 
   const savingRef = useRef(false);
   const revisionRef = useRef(0);
+  const hadEntryRef = useRef(Boolean(entry));
+  useEffect(() => {
+    const refresh = () => {
+      // A remote refresh must never replace text the user has not saved yet.
+      if (dirtyRef.current || savingRef.current) return;
+      const incoming = findJournal(date);
+      if (!incoming && !hadEntryRef.current) return;
+      hadEntryRef.current = Boolean(incoming);
+      const next = incoming ?? { date, content: "", mood: "平静", updatedAt: "" };
+      draftRef.current = next;
+      setContent(next.content);
+      setMood(next.mood ?? "平静");
+      setImages(next.images ?? []);
+      setHighlights(next.highlights ?? []);
+      setTemplate(next.template ?? "free");
+      setTouchEvent(next.touchEvent ?? "");
+      setTouchWhy(next.touchWhy ?? "");
+      setTouchAction(next.touchAction ?? "");
+      setReviewDesc(next.reviewDesc ?? "");
+      setReviewAnalysis(next.reviewAnalysis ?? "");
+      setReviewAction(next.reviewAction ?? "");
+      setLinkedDiaryIds(next.linkedDiaryIds ?? []);
+      setLinkedDiaryDates(next.linkedDiaryDates ?? {});
+      setMetaCognition({ ...defaultMeta, ...next.metaCognition });
+      setLastModifiedAt(next.updatedAt || undefined);
+      setSaved(Boolean(incoming));
+      setSaveError("");
+    };
+    window.addEventListener(STORAGE_EVENTS.journalsChanged, refresh);
+    return () => window.removeEventListener(STORAGE_EVENTS.journalsChanged, refresh);
+  }, [date]);
   const persist = useCallback(async (force = false) => {
     if (savingRef.current || (!force && !dirtyRef.current)) return;
     savingRef.current = true;
@@ -298,6 +330,7 @@ function JournalEditor({
     try {
       const savedEntry = saveJournal(draftRef.current);
       await flushBrowserRecords();
+      hadEntryRef.current = true;
       setSaveError("");
       setLastModifiedAt(savedEntry.updatedAt);
       setAutoSavedAt(new Date(savedEntry.updatedAt).toLocaleTimeString("zh-CN", {
@@ -596,6 +629,7 @@ function JournalEditor({
           <Select
             value={template}
             onValueChange={(value) => {
+                if ((value ?? "free") === template) return;
               setTemplate((value ?? "free") as Template);
               markDirty();
             }}
@@ -685,6 +719,7 @@ function JournalEditor({
         <RichTextEditor
           value={content}
           onChange={(next) => {
+              if (next === plainTextToRichHtml(content)) return;
             const nextMeta = resolveMetaFromContent(next, metaCognition);
             setContent(next);
             setMetaCognition(nextMeta);

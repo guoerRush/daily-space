@@ -58,7 +58,7 @@ export function RichTextEditor({ value, onChange, placeholder = "开始记录…
     const next = plainTextToRichHtml(value);
     if (editor.getHTML() !== next) editor.commands.setContent(next, { emitUpdate: false });
   }, [editor, value]);
-  useEffect(() => { editor?.setEditable(editable); }, [editor, editable]);
+  useEffect(() => { editor?.setEditable(editable, false); }, [editor, editable]);
 
   if (!editor) return <div className={cn("rounded-[calc(var(--radius)+2px)] border border-input/75 bg-card", minHeightClassName)} />;
 

@@ -108,10 +108,6 @@ function serializeMetadata(metadata: SyncMetadata) {
   return JSON.stringify({ version: SYNC_VERSION, keys });
 }
 
-function maxTimestamp(left: string | undefined, right: string) {
-  return left && left > right ? left : right;
-}
-
 function deriveRemoteMetadata(
   records: StoredRecords,
   embedded: SyncMetadata,
@@ -124,14 +120,11 @@ function deriveRemoteMetadata(
   };
   const hasPreviousSnapshot = Object.keys(lastRemoteRecords).length > 0;
 
-  for (const [key, value] of Object.entries(records)) {
-    const changedOutsideClient =
-      !hasPreviousSnapshot || lastRemoteRecords[key] !== value;
+  for (const key of Object.keys(records)) {
     const previous = metadata.keys[key];
     metadata.keys[key] = {
-      updatedAt: changedOutsideClient
-        ? maxTimestamp(previous?.updatedAt, remoteUpdatedAt)
-        : validTimestamp(previous?.updatedAt, remoteUpdatedAt),
+      // The row timestamp also changes when another, unrelated key is saved.
+      updatedAt: validTimestamp(previous?.updatedAt, remoteUpdatedAt),
     };
   }
 
@@ -140,7 +133,7 @@ function deriveRemoteMetadata(
       if (key in records) continue;
       const previous = metadata.keys[key];
       metadata.keys[key] = {
-        updatedAt: maxTimestamp(previous?.updatedAt, remoteUpdatedAt),
+        updatedAt: validTimestamp(previous?.updatedAt, remoteUpdatedAt),
         deleted: true,
       };
     }
@@ -186,10 +179,39 @@ export function mergeVersionedRecords(
   return { records, metadata };
 }
 
+// Journals share one storage key. Merge independent dates against the last
+// acknowledged snapshot, including deletions, instead of replacing the array.
+function mergeJournalDates(base: string | undefined, local: string, remote: string) {
+  type Entry = { date: string; updatedAt?: string };
+  const parse = (raw: string | undefined) => {
+    const entries: unknown = JSON.parse(raw ?? "[]");
+    if (!Array.isArray(entries) || entries.some((item) => !item || typeof item.date !== "string")) {
+      throw new Error("Invalid journal array");
+    }
+    return new Map<string, Entry>(entries.map((item: Entry) => [item.date, item]));
+  };
+  try {
+    const before = parse(base), left = parse(local), right = parse(remote);
+    const result: Entry[] = [];
+    for (const date of new Set([...before.keys(), ...left.keys(), ...right.keys()])) {
+      const a = left.get(date), b = right.get(date), old = before.get(date);
+      const same = (x: Entry | undefined, y: Entry | undefined) => JSON.stringify(x) === JSON.stringify(y);
+      const winner = same(a, old) ? b : same(b, old) ? a
+        : !a || !b ? undefined // A deletion wins a simultaneous edit.
+        : (a.updatedAt ?? "") > (b.updatedAt ?? "") ? a : b;
+      if (winner) result.push(winner);
+    }
+    return JSON.stringify(result.sort((a, b) => b.date.localeCompare(a.date)));
+  } catch {
+    return null;
+  }
+}
+
 export class RecordSynchronizer {
   private active = true;
   private requested = false;
   private running: Promise<void> | null = null;
+  private collisions = 0;
 
   constructor(
     private readonly client: SupabaseClient,
@@ -211,16 +233,6 @@ export class RecordSynchronizer {
       )
     ) {
       this.notify();
-    }
-    const state = parseSyncState(
-      readAccountSyncState<AccountSyncState>(this.storage, this.userId),
-    );
-    // Metadata can be created while the browser is offline. Until a remote
-    // snapshot has actually been read or written, merge local and cloud data
-    // as an initial bootstrap instead of letting one device replace the other.
-    if (!state.lastRemoteUpdatedAt) {
-      await this.bootstrapSync();
-      return;
     }
     this.captureLocalChanges();
     await this.sync();
@@ -267,6 +279,7 @@ export class RecordSynchronizer {
     if (this.running) return this.running;
 
     this.running = (async () => {
+      this.collisions = 0;
       while (this.active && this.requested) {
         this.requested = false;
         await this.syncOnce();
@@ -322,6 +335,7 @@ export class RecordSynchronizer {
       version: SYNC_VERSION,
       keys: { ...state.metadata.keys },
     };
+    const comparableRemote: SyncMetadata = { ...remoteMetadata, keys: { ...remoteMetadata.keys } };
     for (const key of new Set([
       ...Object.keys(state.lastRemoteRecords),
       ...Object.keys(localRecords),
@@ -333,17 +347,40 @@ export class RecordSynchronizer {
       ) {
         delete localMetadata.keys[key];
       }
+      if (state.lastRemoteUpdatedAt && remoteRecords[key] === state.lastRemoteRecords[key]
+        && localRecords[key] !== state.lastRemoteRecords[key]) {
+        delete comparableRemote.keys[key];
+      }
     }
     const merged = mergeVersionedRecords(
       localRecords,
       localMetadata,
       remoteRecords,
-      remoteMetadata,
+      comparableRemote,
     );
-    const visibleChanged = !storedRecordsEqual(localRecords, merged.records);
-
-    replaceStoredRecords(this.storage, merged.records);
-    writeAccountRecords(this.storage, this.userId, merged.records);
+    if (!state.lastRemoteUpdatedAt) {
+      merged.records = mergeRecoveredRecords(localRecords, remoteRecords);
+      if (localRecords[STORAGE_KEYS.habits] !== undefined) {
+        merged.records[STORAGE_KEYS.habits] = localRecords[STORAGE_KEYS.habits];
+      }
+      // Retain tombstones from the cloud when importing an empty/new device.
+      merged.metadata = { version: SYNC_VERSION, keys: { ...remoteMetadata.keys } };
+      for (const [key, value] of Object.entries(merged.records)) {
+        merged.metadata.keys[key] = remoteRecords[key] === value && remoteMetadata.keys[key]
+          ? remoteMetadata.keys[key] : { updatedAt: this.now().toISOString() };
+      }
+    }
+    const journalKey = STORAGE_KEYS.journals;
+    if (state.lastRemoteUpdatedAt && localRecords[journalKey] && remoteRecords[journalKey]
+      && localRecords[journalKey] !== remoteRecords[journalKey]) {
+      const journals = mergeJournalDates(state.lastRemoteRecords[journalKey], localRecords[journalKey], remoteRecords[journalKey]);
+      if (journals !== null) {
+        merged.records[journalKey] = journals;
+        if (journals !== remoteRecords[journalKey]) {
+          merged.metadata.keys[journalKey] = { updatedAt: this.now().toISOString() };
+        }
+      }
+    }
 
     const recordsForRemote: Record<string, string> = {
       ...merged.records,
@@ -359,98 +396,53 @@ export class RecordSynchronizer {
 
     if (!storedRecordsEqual(currentRemote, recordsForRemote)) {
       savedAt = this.now().toISOString();
-      const { error: saveError } = await this.client.from("user_records").upsert(
-        {
-          user_id: this.userId,
-          records: recordsForRemote,
-          updated_at: savedAt,
-        },
-        { onConflict: "user_id" },
-      );
+      // Compare-and-swap: two devices may read the same snapshot. The losing
+      // writer must re-read and merge, never blindly overwrite the winner.
+      const row = { user_id: this.userId, records: recordsForRemote, updated_at: savedAt };
+      const table = this.client.from("user_records");
+      let write;
+      if (data) {
+        const update = table.update(row).eq("user_id", this.userId);
+        write = data.updated_at === null ? update.is("updated_at", null)
+          : update.eq("updated_at", data.updated_at);
+      } else {
+        write = table.insert(row);
+      }
+      const { data: saved, error: saveError } = await write.select("updated_at").maybeSingle<{ updated_at: string }>();
+      if ((!saveError && !saved) || saveError?.code === "23505") {
+        if (++this.collisions > 5) throw new Error("同步冲突，请稍后重试。");
+        this.requested = true;
+        return;
+      }
       if (saveError) throw saveError;
       if (!this.active) return;
+      savedAt = validTimestamp(saved?.updated_at, savedAt);
     }
 
+    // Keep edits made while the upload was in flight, and send them next.
+    const latest = collectStoredRecords(this.storage);
+    const visible = { ...merged.records };
+    let editedDuringUpload = false;
+    for (const key of new Set([...Object.keys(localRecords), ...Object.keys(latest)])) {
+      if (localRecords[key] === latest[key]) continue;
+      editedDuringUpload = true;
+      if (latest[key] === undefined) delete visible[key];
+      else visible[key] = latest[key];
+    }
+    const visibleChanged = !storedRecordsEqual(latest, visible);
+    replaceStoredRecords(this.storage, visible);
+    writeAccountRecords(this.storage, this.userId, merged.records);
     writeAccountSyncState(this.storage, this.userId, {
       metadata: merged.metadata,
       lastRemoteRecords: merged.records,
       lastRemoteUpdatedAt: savedAt,
     } satisfies AccountSyncState);
-    if (this.storage === browserRecords) await flushBrowserRecords();
-    if (this.active && visibleChanged) this.notify();
-  }
-
-  private async bootstrapSync() {
-    const { data, error } = await this.client
-      .from("user_records")
-      .select("records,updated_at")
-      .eq("user_id", this.userId)
-      .maybeSingle<UserRecordRow>();
-    if (error) throw error;
-    if (!this.active) return;
-
-    const localRecords = collectStoredRecords(this.storage);
-    const rawRemote =
-      data?.records && typeof data.records === "object"
-        ? (data.records as Record<string, unknown>)
-        : {};
-    const remoteRecords = sanitizeStoredRecords(rawRemote);
-    if (!data || Object.keys(remoteRecords).length === 0) {
+    if (editedDuringUpload) {
       this.captureLocalChanges();
-      await this.sync();
-      return;
+      this.requested = true;
     }
-
-    const remoteUpdatedAt = validTimestamp(
-      data.updated_at,
-      new Date(0).toISOString(),
-    );
-    const remoteMetadata = deriveRemoteMetadata(
-      remoteRecords,
-      parseMetadata(rawRemote[REMOTE_METADATA_KEY]),
-      remoteUpdatedAt,
-      {},
-    );
-    const mergedRecords = mergeRecoveredRecords(localRecords, remoteRecords);
-    // The habits array is edited as a complete list. Merging array items here
-    // would bring deleted habits back from an older cloud snapshot during the
-    // first sync after a device or account switch.
-    if (localRecords[STORAGE_KEYS.habits] !== undefined) {
-      mergedRecords[STORAGE_KEYS.habits] = localRecords[STORAGE_KEYS.habits];
-    }
-    const mergedMetadata = emptyMetadata();
-    const now = this.now().toISOString();
-    for (const [key, value] of Object.entries(mergedRecords)) {
-      mergedMetadata.keys[key] =
-        remoteRecords[key] === value && remoteMetadata.keys[key]
-          ? remoteMetadata.keys[key]
-          : { updatedAt: now };
-    }
-
-    const visibleChanged = !storedRecordsEqual(localRecords, mergedRecords);
-    replaceStoredRecords(this.storage, mergedRecords);
-    writeAccountRecords(this.storage, this.userId, mergedRecords);
-    const recordsForRemote: Record<string, string> = {
-      ...mergedRecords,
-      [REMOTE_METADATA_KEY]: serializeMetadata(mergedMetadata),
-    };
-    const { error: saveError } = await this.client.from("user_records").upsert(
-      {
-        user_id: this.userId,
-        records: recordsForRemote,
-        updated_at: now,
-      },
-      { onConflict: "user_id" },
-    );
-    if (saveError) throw saveError;
-    if (!this.active) return;
-
-    writeAccountSyncState(this.storage, this.userId, {
-      metadata: mergedMetadata,
-      lastRemoteRecords: mergedRecords,
-      lastRemoteUpdatedAt: now,
-    } satisfies AccountSyncState);
     if (this.storage === browserRecords) await flushBrowserRecords();
     if (this.active && visibleChanged) this.notify();
   }
+
 }

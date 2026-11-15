@@ -39,10 +39,11 @@ export function AppFrame({ children, compactContent = false }: { children: React
         <div className="flex items-center gap-1.5"><DailyStatus /><VoiceDictationButton /><AccountControl /><Link href="/settings#reminders" aria-label="提醒设置" title="提醒设置" className="relative grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-primary"><Bell size={18} /><span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[#e97968]" /></Link><Link href="/settings" aria-label="设置" title="设置" className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-primary"><Settings size={18} /></Link></div>
       </div>
     </header>
+    <CloudRecordSync />
     <DailyQuote />
     <div className="grid w-full grid-cols-1 lg:grid-cols-[232px_minmax(0,1fr)]"><aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] self-start flex-col overflow-y-auto border-r border-border/80 bg-card/65 px-4 py-6 backdrop-blur-sm lg:flex"><p className="px-3 pb-3 text-[11px] font-semibold text-muted-foreground">工作台</p><nav className="flex flex-col gap-1 text-sm">{navigation.map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${pathname === href ? "border-primary/15 bg-secondary font-semibold text-primary shadow-[0_5px_14px_rgba(55,122,110,0.08)]" : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-card hover:text-foreground"}`}><Icon size={17} />{label}</Link>)}</nav><CompanionShelf /></aside><main className={`min-w-0 px-4 py-6 pb-24 md:py-9 lg:pb-12 ${compactContent ? "md:px-4" : "md:px-8"}`}>{children}</main></div>
     <nav className="fixed inset-x-0 bottom-0 z-20 flex overflow-x-auto border-t border-border/80 bg-card/95 px-1 shadow-[0_-6px_20px_rgba(49,108,99,0.07)] backdrop-blur-xl lg:hidden">{navigation.map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={`grid min-w-[76px] flex-1 place-items-center gap-1 py-2.5 text-[11px] ${pathname === href ? "font-semibold text-primary" : "text-muted-foreground"}`}><Icon size={18} />{label}</Link>)}</nav>
-    <PocketPet /><VoiceDictationButton floating /><ReminderWatcher /><CloudRecordSync /><LocalBackupSync /><ObsidianAutoSync />
+    <PocketPet /><VoiceDictationButton floating /><ReminderWatcher /><LocalBackupSync /><ObsidianAutoSync />
   </div></AuthGate>;
 }
 

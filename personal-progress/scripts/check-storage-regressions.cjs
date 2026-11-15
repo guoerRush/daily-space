@@ -33,6 +33,33 @@ class MemoryStorage {
   removeItem(key) { this.data.delete(key); }
 }
 
+// PostgREST compare-and-swap simulator, shared by isolated device stores.
+function cloudClient(rows = new Map()) {
+  let revision = 0;
+  const client = { fail: false, beforeWrite: null, from: () => {
+    let mode = "read", row, id, expected;
+    const query = {
+      select: () => query,
+      eq: (key, value) => { if (key === "user_id") id = value; else expected = value; return query; },
+      is: (key, value) => query.eq(key, value),
+      insert: value => { mode = "insert"; row = value; id = value.user_id; return query; },
+      update: value => { mode = "update"; row = value; return query; },
+      maybeSingle: async () => {
+        if (client.fail) return { error: { message: "Offline" } };
+        if (mode === "read") return { data: structuredClone(rows.get(id) ?? null) };
+        if (client.beforeWrite) { const hook = client.beforeWrite; client.beforeWrite = null; await hook(); }
+        if (mode === "insert" && rows.has(id)) return { error: { code: "23505" } };
+        if (mode === "update" && rows.get(id)?.updated_at !== expected) return { data: null };
+        const updated_at = new Date(Date.UTC(2026, 10, 15) + ++revision).toISOString();
+        rows.set(id, structuredClone({ ...row, updated_at }));
+        return { data: { updated_at } };
+      },
+    };
+    return query;
+  }};
+  return client;
+}
+
 function quotaLimitedStorage() {
   const storage = new MemoryStorage();
   const setItem = storage.setItem.bind(storage);
@@ -95,10 +122,7 @@ async function fitness() {
   const { RecordSynchronizer } = load("@/lib/record-sync");
   const { deactivateAccountStorage } = load("@/lib/account-storage");
   const rows = new Map();
-  const client = { from: () => ({
-    select: () => ({ eq: (_, id) => ({ maybeSingle: async () => ({ data: rows.get(id) ?? null }) }) }),
-    upsert: async (row) => { rows.set(row.user_id, structuredClone(row)); return {}; },
-  }) };
+  const client = cloudClient(rows);
   const legacy = Array.from({ length: 120 }, (_, i) => ({
     date: new Date(Date.UTC(2026, 0, i + 1)).toISOString().slice(0, 10), values: { bench: `${i} kg` },
   }));
@@ -203,4 +227,61 @@ async function photos() {
   console.log("PASS photo client: 48-megapixel dimensions, adaptive compression, URL-only result, memory cleanup");
 }
 
-(async () => { planStorageQuota(); await fitness(); await photos(); })().catch((error) => { console.error(error); process.exitCode = 1; });
+async function deviceSync() {
+  const load = loader();
+  const { RecordSynchronizer } = load("@/lib/record-sync");
+  const { STORAGE_KEYS } = load("@/lib/storage-contract");
+  const rows = new Map(), client = cloudClient(rows);
+  const phone = new MemoryStorage(), desktop = new MemoryStorage();
+  let time = Date.UTC(2026, 10, 14), notices = 0;
+  const now = () => new Date(++time);
+  const a = new RecordSynchronizer(client, "owner", phone, () => notices++, now);
+  const b = new RecordSynchronizer(client, "owner", desktop, () => notices++, now);
+  await a.start(); await b.start();
+  const p1 = STORAGE_KEYS.planPrefix + "2026-11-15", p2 = STORAGE_KEYS.planPrefix + "2026-11-16";
+  phone.setItem(p1, "phone plan"); desktop.setItem(p2, "desktop plan");
+  await Promise.all([a.sync(), b.sync()]);
+  await Promise.all([a.sync(), b.sync()]);
+  assert.equal(phone.getItem(p2), "desktop plan");
+  assert.equal(desktop.getItem(p1), "phone plan");
+  assert.equal(rows.get("owner").records[p1], "phone plan");
+  // Phone clock is behind the server; a genuine local edit still uploads.
+  phone.setItem(p1, "phone edited offline");
+  await a.sync(); await b.sync();
+  assert.equal(desktop.getItem(p1), "phone edited offline");
+  const key = STORAGE_KEYS.journals;
+  const old = {date: "2026-11-01", content: "old", updatedAt: "2026-11-01"};
+  phone.setItem(key, JSON.stringify([old]));
+  await a.sync(); await b.sync();
+  const left = {date: "2026-11-14", content: "phone journal", images: ["https://example.test/photo"], updatedAt: "2026-11-14"};
+  const right = {date: "2026-11-15", content: "desktop journal", updatedAt: "2026-11-15"};
+  phone.setItem(key, JSON.stringify([left, old]));
+  desktop.setItem(key, JSON.stringify([right, old]));
+  await Promise.all([a.sync(), b.sync()]); await a.sync(); await b.sync();
+  assert.equal(JSON.parse(phone.getItem(key)).length, 3);
+  assert.equal(phone.getItem(key), desktop.getItem(key));
+  // Deleting one journal while the other device edits a different date keeps both intentions.
+  phone.setItem(key, JSON.stringify([left, right]));
+  desktop.setItem(key, JSON.stringify([{...right, content: "edited"}, left, old]));
+  await Promise.all([a.sync(), b.sync()]); await a.sync(); await b.sync();
+  assert.deepEqual(JSON.parse(phone.getItem(key)).map(x => x.date), [right.date, left.date]);
+  assert.equal(JSON.parse(phone.getItem(key))[0].content, "edited");
+  assert.deepEqual(JSON.parse(phone.getItem(key))[1].images, left.images);
+  // No visible incoming writes are applied on a failed upload; local drafts survive.
+  phone.setItem(p1, "offline pending"); client.fail = true;
+  await assert.rejects(a.sync());
+  assert.equal(phone.getItem(p1), "offline pending");
+  client.fail = false; await a.sync(); await b.sync();
+  assert.equal(desktop.getItem(p1), "offline pending");
+  phone.setItem(p1, "first edit");
+  client.beforeWrite = () => { phone.setItem(p1, "typed during upload"); a.captureLocalChanges(); };
+  await a.sync(); await b.sync();
+  assert.equal(desktop.getItem(p1), "typed during upload");
+  assert.ok(notices > 0);
+  phone.removeItem(p1); await a.sync(); await b.sync();
+  assert.equal(desktop.getItem(p1), null);
+  a.dispose(); b.dispose();
+  console.log("PASS two devices: concurrent writes, clock skew, offline retry, in-flight edits, per-date journal merging, deletion and photo preservation");
+}
+
+(async () => { planStorageQuota(); await fitness(); await photos(); await deviceSync(); })().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -59,7 +59,7 @@ import {
   remarkCompletionId,
   setCompletionStatus,
 } from "@/lib/completions";
-import { STORAGE_KEYS } from "@/lib/storage-contract";
+import { STORAGE_KEYS, STORAGE_EVENTS } from "@/lib/storage-contract";
 
 type Task = { id: number; text: string; priority: number; done: boolean };
 type PlannedRow = { id: number; time: string; activity: string };
@@ -325,6 +325,25 @@ function PlanWorkspace() {
   );
   const weekRange = getWeekRange(date);
   const showEveningSummary = date === todayKey() && new Date().getHours() >= 20;
+
+  const refreshSyncedPlan = useEffectEvent(() => {
+    if (savingLock) return;
+    if (!planSaveFailed) setPlan(loadPlanWithYesterdayRemarks(date));
+    if (!weeklySaveFailed) setWeeklyPriorities(loadWeeklyPriorities(getWeekRange(date).weekStart).priorities);
+  });
+  useEffect(() => {
+    let timer: number | undefined;
+    const refresh = () => {
+      window.clearTimeout(timer);
+      // Let local save handlers finish before reading their new values.
+      timer = window.setTimeout(() => refreshSyncedPlan(), 0);
+    };
+    window.addEventListener(STORAGE_EVENTS.plansChanged, refresh);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener(STORAGE_EVENTS.plansChanged, refresh);
+    };
+  }, []);
 
   const confirmDraftWrite = (onFailure: () => void) => {
     void flushBrowserRecords().catch(onFailure);

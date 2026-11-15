@@ -1,16 +1,20 @@
 "use client";
 
-import { browserRecords } from "@/lib/browser-records";
-import { useEffect } from "react";
+import { browserRecords, flushBrowserRecords } from "@/lib/browser-records";
+import { useEffect, useRef, useState } from "react";
+import { CloudCheck, CloudOff, RefreshCw } from "lucide-react";
 import { deactivateAccountStorage } from "@/lib/account-storage";
 import { RecordSynchronizer } from "@/lib/record-sync";
-import {
-  dispatchStorageChanges,
-  subscribeToStorageChanges,
-} from "@/lib/storage-contract";
+import { dispatchStorageChanges, subscribeToStorageChanges } from "@/lib/storage-contract";
 import { getSupabaseClient } from "@/lib/supabase";
 
+type Status = "pending" | "syncing" | "synced" | "error" | "offline";
+
 export function CloudRecordSync() {
+  const [status, setStatus] = useState<Status>("pending");
+  const [detail, setDetail] = useState("");
+  const [email, setEmail] = useState("");
+  const retry = useRef<() => void>(() => {});
   useEffect(() => {
     const supabase = getSupabaseClient();
     if (!supabase) return;
@@ -20,98 +24,131 @@ export function CloudRecordSync() {
     let retryDelay = 2_000;
     let active = true;
     let generation = 0;
+    let ready = false;
+    let inFlight = false;
+    let changed = 0;
 
-    const clearRetry = (resetDelay = false) => {
-      if (retryTimer) window.clearTimeout(retryTimer);
+    const clearRetry = () => {
+      window.clearTimeout(retryTimer);
       retryTimer = undefined;
-      if (resetDelay) retryDelay = 2_000;
     };
-
-    const start = async (userId: string) => {
-      const currentGeneration = ++generation;
+    const run = async () => {
+      if (!active || !synchronizer || inFlight) return;
+      window.clearTimeout(timer);
+      timer = undefined;
       clearRetry();
-      synchronizer?.dispose();
-      const next = new RecordSynchronizer(supabase, userId);
-      synchronizer = next;
+      const next = synchronizer;
+      const currentGeneration = generation;
+      const before = changed;
+      inFlight = true;
+      setStatus(navigator.onLine ? "syncing" : "offline");
       try {
-        await next.start();
+        await flushBrowserRecords();
+        if (!ready) await next.start();
+        else await next.sync();
+        if (!active || currentGeneration !== generation) return;
+        ready = true;
         retryDelay = 2_000;
+        setStatus(before === changed ? "synced" : "pending");
+        setDetail(`最近同步：${new Date().toLocaleTimeString("zh-CN")}`);
       } catch (error) {
-        console.error("Daily Space record sync failed to start.", error);
+        if (!active || currentGeneration !== generation) return;
+        console.error("Daily Space cloud sync failed.", error);
+        setStatus(navigator.onLine ? "error" : "offline");
+        const code = error && typeof error === "object" && "code" in error ? error.code : "";
+        setDetail(code === "42501" || code === "PGRST301"
+          ? "登录授权已失效，请重新登录同一账号。"
+          : "尚未完成云端同步，将自动重试；请保持页面打开。也可点击立即重试。");
+        retryTimer = window.setTimeout(() => { void run(); }, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 30_000);
+      } finally {
         if (active && currentGeneration === generation) {
-          retryTimer = window.setTimeout(() => {
-            retryTimer = undefined;
-            void start(userId);
-          }, retryDelay);
-          retryDelay = Math.min(retryDelay * 2, 30_000);
+          inFlight = false;
+          if (before !== changed && !retryTimer) timer = window.setTimeout(() => { void run(); }, 500);
         }
       }
-      if (!active || currentGeneration !== generation) next.dispose();
     };
-
-    const schedule = () => {
-      if (!synchronizer?.captureLocalChanges()) return;
-      if (timer) window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        void synchronizer?.sync().catch((error) => {
-          console.error("Daily Space record sync failed.", error);
-        });
-      }, 500);
-    };
-
-    const refreshRemote = () => {
-      if (document.visibilityState === "hidden") return;
-      void synchronizer?.sync().catch((error) => {
-        console.error("Daily Space record refresh failed.", error);
-      });
-    };
-
-    const flushBeforeBackground = () => {
-      synchronizer?.captureLocalChanges();
-      void synchronizer?.sync().catch((error) => {
-        console.error("Daily Space record flush failed.", error);
-      });
-    };
-
-    void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (active && session) void start(session.user.id);
-    });
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        if (synchronizer?.userId !== session.user.id) {
-          void start(session.user.id);
-        }
-        return;
-      }
+    retry.current = () => { void run(); };
+    const sessionChanged = (session: { user: { id: string; email?: string } } | null) => {
+      if (!active) return;
+      setEmail(session?.user.email ?? "");
+      if (session && synchronizer?.userId === session.user.id) return;
       generation += 1;
       synchronizer?.dispose();
-      synchronizer = null;
-      deactivateAccountStorage(browserRecords);
-      dispatchStorageChanges(window);
+      clearRetry();
+      window.clearTimeout(timer);
+      ready = false;
+      inFlight = false;
+      synchronizer = session ? new RecordSynchronizer(supabase, session.user.id) : null;
+      if (session) void run();
+      else {
+        deactivateAccountStorage(browserRecords);
+        dispatchStorageChanges(window);
+      }
+    };
+    const schedule = () => {
+      if (!synchronizer) return;
+      try {
+        if (!synchronizer.captureLocalChanges()) return;
+        changed += 1;
+        setStatus(navigator.onLine ? "pending" : "offline");
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => { void run(); }, 500);
+      } catch {
+        setStatus("error");
+        setDetail("本机记录暂时无法读取或保存，请保留页面并重试。");
+      }
+    };
+    const refreshRemote = () => {
+      if (document.visibilityState !== "hidden") void run();
+    };
+    const offline = () => setStatus("offline");
+    const visibilityChanged = () => {
+      // A background transition is best effort; pending data is retried on return.
+      void run();
+    };
+    let authObserved = false;
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!authObserved) sessionChanged(session);
+    }).catch(() => { if (active) setStatus("error"); });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      authObserved = true;
+      sessionChanged(session);
     });
     const unsubscribeChanges = subscribeToStorageChanges(schedule, window);
     const remoteRefresh = window.setInterval(refreshRemote, 15_000);
     window.addEventListener("focus", refreshRemote);
     window.addEventListener("online", refreshRemote);
-    window.addEventListener("visibilitychange", refreshRemote);
-    window.addEventListener("pagehide", flushBeforeBackground);
-
+    window.addEventListener("offline", offline);
+    document.addEventListener("visibilitychange", visibilityChanged);
+    window.addEventListener("pagehide", visibilityChanged);
     return () => {
       active = false;
       generation += 1;
-      clearRetry(true);
+      clearRetry();
       synchronizer?.dispose();
       subscription.unsubscribe();
       unsubscribeChanges();
       window.clearInterval(remoteRefresh);
-      if (timer) window.clearTimeout(timer);
+      window.clearTimeout(timer);
       window.removeEventListener("focus", refreshRemote);
       window.removeEventListener("online", refreshRemote);
-      window.removeEventListener("visibilitychange", refreshRemote);
-      window.removeEventListener("pagehide", flushBeforeBackground);
+      window.removeEventListener("offline", offline);
+      document.removeEventListener("visibilitychange", visibilityChanged);
+      window.removeEventListener("pagehide", visibilityChanged);
+      retry.current = () => {};
     };
   }, []);
-  return null;
+  const failed = status === "error" || status === "offline";
+  const Icon = failed ? CloudOff : status === "synced" ? CloudCheck : RefreshCw;
+  const label = { pending: "等待云端同步", syncing: "正在同步", synced: "已同步到云端", error: "云端未同步 · 点击重试", offline: "离线 · 等待联网同步" }[status];
+  return <div className="border-t border-border/40 bg-card/70 px-4 py-1.5 text-[11px] md:px-8">
+    <div className="mx-auto flex max-w-[1436px] flex-wrap items-center justify-end gap-x-3 gap-y-1">
+      <span className="max-w-[55vw] truncate text-muted-foreground" title="两端登录同一账号即可同步">{email}</span>
+      <button type="button" onClick={() => retry.current()} disabled={status === "syncing"} title={detail || "立即同步手机与电脑的记录"} className={`inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-secondary ${failed ? "text-[#a45f45]" : "text-primary"}`} aria-label="立即同步记录">
+        <Icon size={13} className={status === "syncing" ? "animate-spin" : ""} /><span role="status">{label}</span>
+      </button>
+      {failed && detail ? <span className="w-full text-right text-muted-foreground">{detail}</span> : null}
+    </div>
+  </div>;
 }
