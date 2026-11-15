@@ -1,4 +1,5 @@
 "use client";
+import { flushBrowserRecords } from "@/lib/browser-records";
 import { uploadPhoto } from "@/lib/photo-upload";
 
 
@@ -6,6 +7,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useParams, useSearchParams } from "next/navigation";
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -162,6 +164,7 @@ export default function JournalDetailPage() {
     <AppFrame>
       <ClientOnly>
         <JournalEditor
+          key={params.date}
           date={params.date}
           planSummary={searchParams.get("planSummary") ?? ""}
         />
@@ -286,49 +289,59 @@ function JournalEditor({
     metaCognition,
   ]);
 
-  useEffect(() => {
-    const persist = () => {
-      if (!dirtyRef.current) return;
-      try {
-        saveJournal(draftRef.current);
-        void upsertDiaryRemote(draftRef.current);
+  const savingRef = useRef(false);
+  const revisionRef = useRef(0);
+  const persist = useCallback(async (force = false) => {
+    if (savingRef.current || (!force && !dirtyRef.current)) return;
+    savingRef.current = true;
+    const revision = revisionRef.current;
+    try {
+      const savedEntry = saveJournal(draftRef.current);
+      await flushBrowserRecords();
+      setSaveError("");
+      setLastModifiedAt(savedEntry.updatedAt);
+      setAutoSavedAt(new Date(savedEntry.updatedAt).toLocaleTimeString("zh-CN", {
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+      }));
+      if (revision === revisionRef.current) {
         dirtyRef.current = false;
-        setSaveError("");
         setSaved(true);
-        const savedAt = new Date();
-        setLastModifiedAt(savedAt.toISOString());
-        setAutoSavedAt(savedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-      } catch {
-        setSaveError("保存失败，图片可能超过浏览器存储容量，请减少图片数量或尺寸后重试。");
       }
+      void upsertDiaryRemote(savedEntry).catch((error) => {
+        console.warn("Could not mirror the saved diary.", error);
+      });
+    } catch (error) {
+      console.warn("Could not save the diary.", error);
+      dirtyRef.current = true;
+      setSaved(false);
+      setSaveError("日记尚未保存，草稿仍在此页面。请保留页面并重试保存。");
+    } finally {
+      savingRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    const saveDraft = () => { void persist(); };
+    const saveBeforeBackground = () => {
+      if (document.visibilityState === "hidden") saveDraft();
     };
-    const timer = window.setInterval(persist, 3_000);
-    window.addEventListener("pagehide", persist);
+    const timer = window.setInterval(saveDraft, 3_000);
+    window.addEventListener("pagehide", saveDraft);
+    document.addEventListener("visibilitychange", saveBeforeBackground);
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener("pagehide", persist);
-      persist();
+      window.removeEventListener("pagehide", saveDraft);
+      document.removeEventListener("visibilitychange", saveBeforeBackground);
+      saveDraft();
     };
-  }, [date]);
+  }, [persist]);
 
   const markDirty = () => {
+    revisionRef.current += 1;
     dirtyRef.current = true;
     setSaved(false);
   };
-  const save = () => {
-    try {
-      saveJournal(draftRef.current);
-      void upsertDiaryRemote(draftRef.current);
-      dirtyRef.current = false;
-      setSaveError("");
-      setSaved(true);
-      const savedAt = new Date();
-      setLastModifiedAt(savedAt.toISOString());
-      setAutoSavedAt(savedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-    } catch {
-      setSaveError("保存失败，图片可能超过浏览器存储容量，请减少图片数量或尺寸后重试。");
-    }
-  };
+  const save = () => { void persist(true); };
   const insertTemplate = (text: string) => {
     setContent(
       (current) =>
@@ -355,13 +368,11 @@ function JournalEditor({
     const next = extractHighlights(richTextToPlainText(content));
     setHighlights(next);
     draftRef.current = { ...draftRef.current, highlights: next };
-    saveJournal({ ...draftRef.current, highlights: next });
-    void upsertDiaryRemote({ ...draftRef.current, highlights: next });
-    dirtyRef.current = false;
-    setSaved(true);
+    markDirty();
+    void persist();
     setHighlightStatus(
       next.length
-        ? `已提炼 ${next.length} 条精华点，并保存到日记。`
+        ? `已提炼 ${next.length} 条精华点。`
         : "当前内容较短，补充几句后再试试。",
     );
   };

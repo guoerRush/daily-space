@@ -1,5 +1,6 @@
 "use client";
 
+import { browserRecords } from "@/lib/browser-records";
 import { useEffect } from "react";
 import { deactivateAccountStorage } from "@/lib/account-storage";
 import { RecordSynchronizer } from "@/lib/record-sync";
@@ -87,7 +88,7 @@ export function CloudRecordSync() {
       generation += 1;
       synchronizer?.dispose();
       synchronizer = null;
-      deactivateAccountStorage(window.localStorage);
+      deactivateAccountStorage(browserRecords);
       dispatchStorageChanges(window);
     });
     const unsubscribeChanges = subscribeToStorageChanges(schedule, window);

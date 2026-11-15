@@ -1,5 +1,6 @@
 "use client";
 
+import { browserRecords } from "@/lib/browser-records";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -14,7 +15,7 @@ const key = (day: Date) => [day.getFullYear(), String(day.getMonth() + 1).padSta
 
 function tasksForDate(date: string) {
   try {
-    const plan = JSON.parse(window.localStorage.getItem(`daily-space:plan:${date}`) ?? "{}") as Plan;
+    const plan = JSON.parse(browserRecords.getItem(`daily-space:plan:${date}`) ?? "{}") as Plan;
     return (plan.tasks ?? []).filter((task) => task.text.trim()).sort((a, b) => a.priority - b.priority);
   } catch { return []; }
 }

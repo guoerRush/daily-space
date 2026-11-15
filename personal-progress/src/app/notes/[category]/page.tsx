@@ -1,5 +1,6 @@
 "use client";
 
+import { browserRecords } from "@/lib/browser-records";
 import { uploadPhoto } from "@/lib/photo-upload";
 
 import Link from "next/link";
@@ -251,7 +252,7 @@ function NotesEditor({ category }: { category: NoteCategory }) {
       return;
     }
     const key = `daily-space:plan:${todayKey()}`;
-    const plan = JSON.parse(window.localStorage.getItem(key) ?? "{}") as {
+    const plan = JSON.parse(browserRecords.getItem(key) ?? "{}") as {
       tasks?: Array<{
         id: number;
         text: string;

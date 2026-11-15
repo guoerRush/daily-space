@@ -1,3 +1,4 @@
+import { browserRecords } from "@/lib/browser-records";
 import {
   collectStoredRecords,
   dispatchStorageChanges,
@@ -91,7 +92,7 @@ export function mergeRecoveredRecords(
 }
 
 export function createDataBackup(
-  storage: StorageAdapter = window.localStorage,
+  storage: StorageAdapter = browserRecords,
   now = new Date(),
 ): DataBackup {
   return {
@@ -166,7 +167,7 @@ export function restoreDataBackup(
   } = {},
 ) {
   const backup = parseDataBackup(input);
-  const storage = options.storage ?? window.localStorage;
+  const storage = options.storage ?? browserRecords;
   const records =
     options.mode === "merge"
       ? mergeRecoveredRecords(collectStoredRecords(storage), backup.records)

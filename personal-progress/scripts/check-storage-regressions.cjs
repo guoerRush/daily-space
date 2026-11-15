@@ -33,6 +33,60 @@ class MemoryStorage {
   removeItem(key) { this.data.delete(key); }
 }
 
+function quotaLimitedStorage() {
+  const storage = new MemoryStorage();
+  const setItem = storage.setItem.bind(storage);
+  storage.quota = Infinity;
+  storage.setItem = (key, value) => {
+    const next = new Map(storage.data);
+    next.set(key, String(value));
+    const size = [...next].reduce((total, [name, text]) => total + name.length + text.length, 0);
+    if (size > storage.quota) throw new DOMException("Storage is full", "QuotaExceededError");
+    setItem(key, value);
+  };
+  return storage;
+}
+
+function planStorageQuota() {
+  const storage = quotaLimitedStorage();
+  const window = Object.assign(new EventTarget(), { localStorage: storage });
+  const load = loader({}, { window });
+  const { saveDailyPlan } = load("@/lib/plans");
+  const { browserRecords } = load("@/lib/browser-records");
+  const { activateAccountStorage, readAccountRecords, writeAccountRecords } = load("@/lib/account-storage");
+  const { collectStoredRecords, replaceStoredRecords, STORAGE_EVENTS, STORAGE_KEYS } = load("@/lib/storage-contract");
+  const date = "2026-11-14";
+  const planKey = STORAGE_KEYS.planPrefix + date;
+  const notesKey = STORAGE_KEYS.notes;
+  const journalKey = STORAGE_KEYS.journals;
+  const originalPlan = JSON.stringify({ remarks: "原计划" });
+  const original = { [planKey]: originalPlan, [notesKey]: "[]", [journalKey]: "[]" };
+  replaceStoredRecords(storage, original);
+  activateAccountStorage(browserRecords, "owner");
+  // Use a large duplicate of managed, visible data to put the origin over quota.
+  writeAccountRecords(browserRecords, "owner", { ...original, [notesKey]: "a".repeat(2048) });
+  storage.quota = 1200;
+  let changes = 0;
+  window.addEventListener(STORAGE_EVENTS.plansChanged, () => { changes++; });
+
+  const nextPlan = saveDailyPlan(date, { remarks: "新增内容" });
+  assert.equal(JSON.parse(storage.getItem(planKey)).remarks, "新增内容");
+  assert.equal(storage.getItem(notesKey), "[]");
+  assert.equal(readAccountRecords(browserRecords, "owner")[planKey], originalPlan);
+  assert.equal(changes, 1);
+  assert.throws(() => saveDailyPlan(date, { remarks: "x".repeat(1300) }), { name: "QuotaExceededError" });
+  assert.equal(storage.getItem(planKey), JSON.stringify(nextPlan));
+  assert.equal(changes, 1);
+
+  const beforeSync = collectStoredRecords(storage);
+  assert.throws(() => replaceStoredRecords(storage, {
+    [planKey]: "{}",
+    [journalKey]: "x".repeat(1300),
+  }), { name: "QuotaExceededError" });
+  assert.deepEqual(collectStoredRecords(storage), beforeSync);
+  console.log("PASS plan storage: recover from duplicate cache, keep failed draft's previous save, roll back an incomplete sync");
+}
+
 async function fitness() {
   const storage = new MemoryStorage();
   const window = new EventTarget();
@@ -149,4 +203,4 @@ async function photos() {
   console.log("PASS photo client: 48-megapixel dimensions, adaptive compression, URL-only result, memory cleanup");
 }
 
-(async () => { await fitness(); await photos(); })().catch((error) => { console.error(error); process.exitCode = 1; });
+(async () => { planStorageQuota(); await fitness(); await photos(); })().catch((error) => { console.error(error); process.exitCode = 1; });

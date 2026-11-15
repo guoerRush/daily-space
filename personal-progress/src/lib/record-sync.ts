@@ -1,3 +1,4 @@
+import { browserRecords, flushBrowserRecords } from "@/lib/browser-records";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   activateAccountStorage,
@@ -193,7 +194,7 @@ export class RecordSynchronizer {
   constructor(
     private readonly client: SupabaseClient,
     readonly userId: string,
-    private readonly storage: StorageAdapter = window.localStorage,
+    private readonly storage: StorageAdapter = browserRecords,
     private readonly notify: () => void = () =>
       dispatchStorageChanges(window),
     private readonly now: () => Date = () => new Date(),
@@ -283,10 +284,6 @@ export class RecordSynchronizer {
 
   private async syncOnce() {
     this.captureLocalChanges();
-    const localRecords = collectStoredRecords(this.storage);
-    const state = parseSyncState(
-      readAccountSyncState<AccountSyncState>(this.storage, this.userId),
-    );
     const { data, error } = await this.client
       .from("user_records")
       .select("records,updated_at")
@@ -296,6 +293,12 @@ export class RecordSynchronizer {
     if (error) throw error;
     if (!this.active) return;
 
+    // Edits can arrive while the remote snapshot is being fetched.
+    this.captureLocalChanges();
+    const localRecords = collectStoredRecords(this.storage);
+    const state = parseSyncState(
+      readAccountSyncState<AccountSyncState>(this.storage, this.userId),
+    );
     const rawRemote =
       data?.records && typeof data.records === "object"
         ? (data.records as Record<string, unknown>)
@@ -373,11 +376,11 @@ export class RecordSynchronizer {
       lastRemoteRecords: merged.records,
       lastRemoteUpdatedAt: savedAt,
     } satisfies AccountSyncState);
-    if (visibleChanged) this.notify();
+    if (this.storage === browserRecords) await flushBrowserRecords();
+    if (this.active && visibleChanged) this.notify();
   }
 
   private async bootstrapSync() {
-    const localRecords = collectStoredRecords(this.storage);
     const { data, error } = await this.client
       .from("user_records")
       .select("records,updated_at")
@@ -386,6 +389,7 @@ export class RecordSynchronizer {
     if (error) throw error;
     if (!this.active) return;
 
+    const localRecords = collectStoredRecords(this.storage);
     const rawRemote =
       data?.records && typeof data.records === "object"
         ? (data.records as Record<string, unknown>)
@@ -446,6 +450,7 @@ export class RecordSynchronizer {
       lastRemoteRecords: mergedRecords,
       lastRemoteUpdatedAt: now,
     } satisfies AccountSyncState);
-    if (visibleChanged) this.notify();
+    if (this.storage === browserRecords) await flushBrowserRecords();
+    if (this.active && visibleChanged) this.notify();
   }
 }

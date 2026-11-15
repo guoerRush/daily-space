@@ -89,7 +89,7 @@ export function loadWeeklyPriorities(weekStart: string): WeeklyPriorities {
   }
   try {
     const stored = JSON.parse(
-      window.localStorage.getItem(weeklyPrioritiesKey(weekStart)) ?? "null",
+      browserRecords.getItem(weeklyPrioritiesKey(weekStart)) ?? "null",
     ) as Partial<WeeklyPriorities> | null;
     if (stored && stored.weekStart === weekStart) {
       return {
@@ -120,7 +120,11 @@ export function saveWeeklyPriorities(
     createdAt: current.createdAt ?? `${weekStart}T12:00:00`,
     updatedAt: now,
   };
-  window.localStorage.setItem(weeklyPrioritiesKey(weekStart), JSON.stringify(next));
+  setItemWithAccountCacheRetry(
+    browserRecords,
+    weeklyPrioritiesKey(weekStart),
+    JSON.stringify(next),
+  );
   window.dispatchEvent(new Event(STORAGE_EVENTS.plansChanged));
   return next;
 }
@@ -132,7 +136,8 @@ export function saveDailyPlan<T extends StoredDayPlan>(date: string, plan: T) {
     createdAt: plan.createdAt ?? `${date}T12:00:00`,
     updatedAt: now,
   } satisfies StoredDayPlan;
-  window.localStorage.setItem(
+  setItemWithAccountCacheRetry(
+    browserRecords,
     `${STORAGE_KEYS.planPrefix}${date}`,
     JSON.stringify(next),
   );
@@ -175,12 +180,11 @@ export function remarkItemsToHtml(items: RemarkItem[]) {
 export function listDailyPlans(): Array<{ date: string; plan: StoredDayPlan }> {
   if (typeof window === "undefined") return [];
   const entries: Array<{ date: string; plan: StoredDayPlan }> = [];
-  for (let index = 0; index < window.localStorage.length; index += 1) {
-    const key = window.localStorage.key(index);
-    if (!key?.startsWith(STORAGE_KEYS.planPrefix)) continue;
+  for (const key of browserRecordKeys()) {
+    if (!key.startsWith(STORAGE_KEYS.planPrefix)) continue;
     try {
       const plan = JSON.parse(
-        window.localStorage.getItem(key) ?? "{}",
+        browserRecords.getItem(key) ?? "{}",
       ) as StoredDayPlan;
       plan.createdAt ??= `${key.slice(STORAGE_KEYS.planPrefix.length)}T12:00:00`;
       plan.updatedAt ??= plan.createdAt;
@@ -201,4 +205,6 @@ export function listDailyPlans(): Array<{ date: string; plan: StoredDayPlan }> {
   }
   return entries.sort((a, b) => b.date.localeCompare(a.date));
 }
+import { browserRecordKeys, browserRecords } from "@/lib/browser-records";
 import { STORAGE_EVENTS, STORAGE_KEYS } from "@/lib/storage-contract";
+import { setItemWithAccountCacheRetry } from "@/lib/account-storage";

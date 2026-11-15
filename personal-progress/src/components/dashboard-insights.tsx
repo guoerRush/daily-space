@@ -1,5 +1,6 @@
 "use client";
 
+import { browserRecords } from "@/lib/browser-records";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Check, CheckCircle2, ChevronDown, ChevronUp, Flame, Sparkles, StickyNote, X } from "lucide-react";
@@ -41,7 +42,7 @@ function getData(): DashboardData {
   let plan: Plan = {};
   try {
     plan = JSON.parse(
-      window.localStorage.getItem(`daily-space:plan:${todayKey()}`) ?? "{}",
+      browserRecords.getItem(`daily-space:plan:${todayKey()}`) ?? "{}",
     ) as Plan;
   } catch {
     // Ignore invalid local plan data.
@@ -74,7 +75,7 @@ export function DashboardInsights() {
   const toggleTodayRemark = (id: string) => {
     try {
       const key = `daily-space:plan:${todayKey()}`;
-      const plan = JSON.parse(window.localStorage.getItem(key) ?? "{}") as Plan;
+      const plan = JSON.parse(browserRecords.getItem(key) ?? "{}") as Plan;
       const checks = plan.remarkChecks ?? {};
       const item = buildRemarkItems(plan.remarks ?? "", checks).find(
         (candidate) => candidate.id === id,
@@ -92,7 +93,7 @@ export function DashboardInsights() {
           done,
         );
       }
-      window.localStorage.setItem(
+      browserRecords.setItem(
         key,
         JSON.stringify({
           ...plan,
@@ -107,7 +108,7 @@ export function DashboardInsights() {
   const removeTodayRemark = (id: string) => {
     try {
       const key = `daily-space:plan:${todayKey()}`;
-      const plan = JSON.parse(window.localStorage.getItem(key) ?? "{}") as Plan;
+      const plan = JSON.parse(browserRecords.getItem(key) ?? "{}") as Plan;
       const items = buildRemarkItems(
         plan.remarks ?? "",
         plan.remarkChecks ?? {},
@@ -130,7 +131,7 @@ export function DashboardInsights() {
           .map((item, index) => [`${index}:${item.text}`, item.done] as const)
           .filter((entry) => entry[1]),
       );
-      window.localStorage.setItem(
+      browserRecords.setItem(
         key,
         JSON.stringify({
           ...plan,

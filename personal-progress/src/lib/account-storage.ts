@@ -9,6 +9,7 @@ import {
 const INTERNAL_PREFIX = "__daily_space_internal__:v1:";
 const ACTIVE_USER_KEY = `${INTERNAL_PREFIX}active-user`;
 const LEGACY_MIGRATED_KEY = `${INTERNAL_PREFIX}legacy-migrated`;
+const memoryCaches = new WeakMap<StorageAdapter, Map<string, string>>();
 
 function accountKey(userId: string, suffix: "records" | "sync") {
   return `${INTERNAL_PREFIX}account:${encodeURIComponent(userId)}:${suffix}`;
@@ -16,8 +17,11 @@ function accountKey(userId: string, suffix: "records" | "sync") {
 
 /** Removes only rebuildable account caches; visible records are untouched. */
 export function clearAccountCaches(storage: StorageAdapter, userId: string) {
-  storage.removeItem(accountKey(userId, "records"));
-  storage.removeItem(accountKey(userId, "sync"));
+  for (const suffix of ["records", "sync"] as const) {
+    const key = accountKey(userId, suffix);
+    storage.removeItem(key);
+    memoryCaches.get(storage)?.delete(key);
+  }
 }
 
 function isQuotaError(error: unknown) {
@@ -33,11 +37,46 @@ function isQuotaError(error: unknown) {
 function setAccountItem(storage: StorageAdapter, key: string, value: string) {
   try {
     storage.setItem(key, value);
+    memoryCaches.get(storage)?.delete(key);
   } catch (error) {
     if (!isQuotaError(error)) throw error;
-    // The account cache is disposable: the cloud snapshot and visible keys
-    // remain the source of truth when a mobile browser has a small quota.
-    storage.removeItem(key);
+    cacheInMemory(storage, key, value);
+  }
+}
+
+function cacheInMemory(storage: StorageAdapter, key: string, value: string) {
+  let cache = memoryCaches.get(storage);
+  if (!cache) {
+    cache = new Map();
+    memoryCaches.set(storage, cache);
+  }
+  cache.set(key, value);
+  storage.removeItem(key);
+}
+
+function getAccountItem(storage: StorageAdapter, key: string) {
+  return memoryCaches.get(storage)?.get(key) ?? storage.getItem(key);
+}
+
+export function setItemWithAccountCacheRetry(
+  storage: StorageAdapter,
+  key: string,
+  value: string,
+) {
+  try {
+    storage.setItem(key, value);
+  } catch (error) {
+    if (!isQuotaError(error)) throw error;
+    const userId = getActiveStorageUser(storage);
+    if (!userId) throw error;
+
+    // The active account's duplicate can stay in memory for sync.
+    // Keep the persisted sync metadata and all visible records in place.
+    const cacheKey = accountKey(userId, "records");
+    const cached = storage.getItem(cacheKey);
+    if (cached === null) throw error;
+    cacheInMemory(storage, cacheKey, cached);
+    storage.setItem(key, value);
   }
 }
 
@@ -62,7 +101,7 @@ export function readAccountRecords(
   userId: string,
 ): StoredRecords {
   return sanitizeStoredRecords(
-    parseObject(storage.getItem(accountKey(userId, "records"))),
+    parseObject(getAccountItem(storage, accountKey(userId, "records"))),
   );
 }
 
@@ -82,7 +121,7 @@ export function readAccountSyncState<T extends Record<string, unknown>>(
   storage: StorageAdapter,
   userId: string,
 ): Partial<T> {
-  return parseObject(storage.getItem(accountKey(userId, "sync"))) as Partial<T>;
+  return parseObject(getAccountItem(storage, accountKey(userId, "sync"))) as Partial<T>;
 }
 
 export function writeAccountSyncState(

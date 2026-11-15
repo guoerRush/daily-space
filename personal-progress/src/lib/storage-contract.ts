@@ -3,7 +3,7 @@ export type StoredRecords = Record<string, string>;
 export type StorageAdapter = Pick<
   Storage,
   "getItem" | "setItem" | "removeItem" | "key" | "length"
->;
+> & { keys?(): string[] };
 
 export const STORAGE_KEYS = {
   cognitiveSettings: "daily-space:cognitive-settings",
@@ -74,8 +74,8 @@ export function isManagedStorageKey(key: string) {
 
 export function collectStoredRecords(storage: StorageAdapter): StoredRecords {
   const records: StoredRecords = {};
-  for (let index = 0; index < storage.length; index += 1) {
-    const key = storage.key(index);
+  const keys = storage.keys?.() ?? Array.from({ length: storage.length }, (_, index) => storage.key(index));
+  for (const key of keys) {
     if (!key || !isManagedStorageKey(key)) continue;
     const value = storage.getItem(key);
     if (value !== null) records[key] = value;
@@ -97,11 +97,28 @@ export function replaceStoredRecords(
   storage: StorageAdapter,
   records: StoredRecords,
 ) {
-  for (const key of Object.keys(collectStoredRecords(storage))) {
-    storage.removeItem(key);
-  }
-  for (const [key, value] of Object.entries(sanitizeStoredRecords(records))) {
-    storage.setItem(key, value);
+  const current = collectStoredRecords(storage);
+  const next = sanitizeStoredRecords(records);
+  const changes = [...new Set([...Object.keys(current), ...Object.keys(next)])]
+    .filter((key) => current[key] !== next[key]);
+  const sizeDelta = (key: string) =>
+    (Object.hasOwn(next, key) ? key.length + next[key].length : 0) -
+    (Object.hasOwn(current, key) ? key.length + current[key].length : 0);
+  // Make room by applying removals and shrinking values before growing the data.
+  changes.sort((left, right) => sizeDelta(left) - sizeDelta(right));
+  const applied: string[] = [];
+  try {
+    for (const key of changes) {
+      if (Object.hasOwn(next, key)) storage.setItem(key, next[key]);
+      else storage.removeItem(key);
+      applied.push(key);
+    }
+  } catch (error) {
+    for (const key of applied.reverse()) {
+      if (Object.hasOwn(current, key)) storage.setItem(key, current[key]);
+      else storage.removeItem(key);
+    }
+    throw error;
   }
 }
 

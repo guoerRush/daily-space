@@ -1,6 +1,8 @@
+import { browserRecordKeys, browserRecords } from "@/lib/browser-records";
 import { todayKey } from "@/lib/journals";
 import { buildRemarkItems, type StoredDayPlan } from "@/lib/plans";
 import { STORAGE_EVENTS, STORAGE_KEYS } from "@/lib/storage-contract";
+import { setItemWithAccountCacheRetry } from "@/lib/account-storage";
 
 export type CompletionKind =
   | "goal"
@@ -51,7 +53,7 @@ function readArchive(): CompletionRecord[] {
   if (typeof window === "undefined") return [];
   try {
     const parsed = JSON.parse(
-      window.localStorage.getItem(STORAGE_KEYS.completionHistory) ?? "[]",
+      browserRecords.getItem(STORAGE_KEYS.completionHistory) ?? "[]",
     ) as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(
@@ -73,7 +75,8 @@ function readArchive(): CompletionRecord[] {
 }
 
 function writeArchive(records: CompletionRecord[]) {
-  window.localStorage.setItem(
+  setItemWithAccountCacheRetry(
+    browserRecords,
     STORAGE_KEYS.completionHistory,
     JSON.stringify(records),
   );
@@ -133,13 +136,12 @@ function collectGoalTasks(
 
 function collectCurrentRecords() {
   const records: CompletionRecord[] = [];
-  for (let index = 0; index < window.localStorage.length; index += 1) {
-    const key = window.localStorage.key(index);
-    if (!key?.startsWith(STORAGE_KEYS.planPrefix)) continue;
+  for (const key of browserRecordKeys()) {
+    if (!key.startsWith(STORAGE_KEYS.planPrefix)) continue;
     const date = key.slice(STORAGE_KEYS.planPrefix.length);
     try {
       const plan = JSON.parse(
-        window.localStorage.getItem(key) ?? "{}",
+        browserRecords.getItem(key) ?? "{}",
       ) as StoredDayPlan;
       for (const task of plan.tasks ?? []) {
         if (!task.done || !task.text.trim()) continue;
@@ -188,7 +190,7 @@ function collectCurrentRecords() {
 
   try {
     const goals = JSON.parse(
-      window.localStorage.getItem(STORAGE_KEYS.goals) ?? "[]",
+      browserRecords.getItem(STORAGE_KEYS.goals) ?? "[]",
     ) as StoredGoal[];
     for (const goal of goals) {
       if (goal.done && goal.label.trim()) {

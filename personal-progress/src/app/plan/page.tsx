@@ -1,7 +1,9 @@
 "use client";
 
+import { browserRecords, flushBrowserRecords } from "@/lib/browser-records";
 import {
   useEffect,
+  useEffectEvent,
   useState,
   useSyncExternalStore,
   type CSSProperties,
@@ -57,6 +59,7 @@ import {
   remarkCompletionId,
   setCompletionStatus,
 } from "@/lib/completions";
+import { STORAGE_KEYS } from "@/lib/storage-contract";
 
 type Task = { id: number; text: string; priority: number; done: boolean };
 type PlannedRow = { id: number; time: string; activity: string };
@@ -122,14 +125,14 @@ function ClientOnly({ children }: { children: ReactNode }) {
 }
 
 function getPlanKey(date: string) {
-  return `daily-space:plan:${date}`;
+  return `${STORAGE_KEYS.planPrefix}${date}`;
 }
 function getPlan(date: string): DayPlan {
   try {
     const storedPlan = {
       ...emptyPlan,
       ...(JSON.parse(
-        window.localStorage.getItem(getPlanKey(date)) ?? "{}",
+        browserRecords.getItem(getPlanKey(date)) ?? "{}",
       ) as Partial<DayPlan>),
     };
     return {
@@ -161,7 +164,7 @@ function nextDateKey(date: string) {
   ].join("-");
 }
 
-function syncUnfinishedRemarksFromYesterday(date: string, currentPlan: DayPlan) {
+function carryOverUnfinishedRemarks(date: string, currentPlan: DayPlan) {
   if (date !== todayKey()) return currentPlan;
 
   const yesterday = previousDateKey(date);
@@ -169,32 +172,29 @@ function syncUnfinishedRemarksFromYesterday(date: string, currentPlan: DayPlan) 
 
   const yesterdayPlan = getPlan(yesterday);
   const unfinished = buildRemarkItems(yesterdayPlan.remarks, yesterdayPlan.remarkChecks).filter((item) => !item.done);
-  if (!unfinished.length) {
-    const next = { ...currentPlan, remarkCarryoverSyncedFrom: yesterday };
-    return saveDailyPlan(date, next);
-  }
-
   const todayItems = buildRemarkItems(currentPlan.remarks, currentPlan.remarkChecks);
   const additions = unfinished.filter((item) => !todayItems.some((todayItem) => todayItem.text === item.text));
   if (!additions.length) {
-    const next = { ...currentPlan, remarkCarryoverSyncedFrom: yesterday };
-    return saveDailyPlan(date, next);
+    return { ...currentPlan, remarkCarryoverSyncedFrom: yesterday };
   }
 
-  const next = {
+  return {
     ...currentPlan,
     remarks: `${currentPlan.remarks.trim()}${currentPlan.remarks.trim() ? "<p></p>" : ""}${remarkItemsToHtml(additions)}`,
     remarkChecks: currentPlan.remarkChecks ?? {},
     remarkCarryoverSyncedFrom: yesterday,
   };
-  return saveDailyPlan(date, next);
 }
 
 function loadPlanWithYesterdayRemarks(date: string) {
-  const storedPlan = window.localStorage.getItem(getPlanKey(date));
   const currentPlan = getPlan(date);
-  // Carry-over is only for a newly created day. Existing drafts are user-owned.
-  return storedPlan ? currentPlan : syncUnfinishedRemarksFromYesterday(date, currentPlan);
+  try {
+    return browserRecords.getItem(getPlanKey(date))
+      ? currentPlan
+      : carryOverUnfinishedRemarks(date, currentPlan);
+  } catch {
+    return currentPlan;
+  }
 }
 
 export default function PlanPage() {
@@ -282,6 +282,10 @@ function PlanWorkspace() {
     loadWeeklyPriorities(getWeekRange(initialDate).weekStart).priorities,
   );
   const [message, setMessage] = useState("");
+  const [planSaveFailed, setPlanSaveFailed] = useState(false);
+  const [weeklySaveFailed, setWeeklySaveFailed] = useState(false);
+  const [savingLock, setSavingLock] = useState(false);
+  const [actionSaveFailed, setActionSaveFailed] = useState(false);
   const [showAllPastPlans, setShowAllPastPlans] = useState(false);
   const [focusTaskId, setFocusTaskId] = useState<number | null>(null);
   const [focusStartedAt, setFocusStartedAt] = useState("");
@@ -322,6 +326,89 @@ function PlanWorkspace() {
   const weekRange = getWeekRange(date);
   const showEveningSummary = date === todayKey() && new Date().getHours() >= 20;
 
+  const confirmDraftWrite = (onFailure: () => void) => {
+    void flushBrowserRecords().catch(onFailure);
+  };
+  const persistPlan = (next: DayPlan, keepDraft = true) => {
+    try {
+      setPlan(saveDailyPlan(date, next));
+      setPlanSaveFailed(false);
+      setActionSaveFailed(false);
+      confirmDraftWrite(() => setPlanSaveFailed(true));
+      return true;
+    } catch (error) {
+      console.warn("Could not save the day plan.", error);
+      if (keepDraft) {
+        setPlan(next);
+        setPlanSaveFailed(true);
+      } else {
+        setActionSaveFailed(true);
+      }
+      return false;
+    }
+  };
+  const persistWeeklyPriorities = (next: [string, string, string]) => {
+    setWeeklyPriorities(next);
+    try {
+      saveWeeklyPriorities(weekRange.weekStart, next);
+      setWeeklySaveFailed(false);
+      confirmDraftWrite(() => setWeeklySaveFailed(true));
+      return true;
+    } catch (error) {
+      console.warn("Could not save weekly priorities.", error);
+      setWeeklySaveFailed(true);
+      return false;
+    }
+  };
+  const retryDrafts = async () => {
+    const planSaved = !planSaveFailed || persistPlan(plan);
+    const weekSaved = !weeklySaveFailed || persistWeeklyPriorities(weeklyPriorities);
+    if (!planSaved || !weekSaved) return false;
+    try {
+      await flushBrowserRecords();
+      return true;
+    } catch {
+      setPlanSaveFailed(true);
+      return false;
+    }
+  };
+  const archiveCompletion = (...args: Parameters<typeof setCompletionStatus>) => {
+    try {
+      setCompletionStatus(...args);
+      confirmDraftWrite(() => setActionSaveFailed(true));
+      return true;
+    } catch (error) {
+      console.warn("Could not save completion history.", error);
+      setActionSaveFailed(true);
+      return false;
+    }
+  };
+
+  const finishFocus = useEffectEvent(() => {
+    if (!focusTask) return;
+    const session: FocusSession = {
+      id: `${focusTask.id}-${Date.now()}`,
+      taskId: focusTask.id,
+      startedAt: focusStartedAt,
+      endedAt: new Date().toISOString(),
+      minutes: 25,
+    };
+    if (persistPlan({ ...plan, focusSessions: [...plan.focusSessions, session] })) {
+      setMessage(`“${focusTask.text || "这项计划"}”已完成一次 25 分钟专注。`);
+    }
+    setFocusTaskId(null);
+    try {
+      const context = new AudioContext();
+      const oscillator = context.createOscillator();
+      oscillator.connect(context.destination);
+      oscillator.onended = () => { void context.close().catch(() => {}); };
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.18);
+    } catch {
+      // Audio may be unavailable in the browser.
+    }
+  });
+
   useEffect(() => {
     if (!focusTask || focusPaused || focusSeconds <= 0) return;
     const timer = window.setInterval(
@@ -333,38 +420,13 @@ function PlanWorkspace() {
 
   useEffect(() => {
     if (!focusTask || focusSeconds > 0) return;
-    const completeTimer = window.setTimeout(() => {
-      const context = new AudioContext();
-      const oscillator = context.createOscillator();
-      oscillator.connect(context.destination);
-      oscillator.start();
-      oscillator.stop(context.currentTime + 0.18);
-      const session: FocusSession = {
-        id: `${focusTask.id}-${Date.now()}`,
-        taskId: focusTask.id,
-        startedAt: focusStartedAt,
-        endedAt: new Date().toISOString(),
-        minutes: 25,
-      };
-      setPlan((current) => {
-        const next = {
-          ...current,
-          focusSessions: [...current.focusSessions, session],
-        };
-        return saveDailyPlan(date, next);
-      });
-      setMessage(`“${focusTask.text || "这项计划"}”已完成一次 25 分钟专注。`);
-      setFocusTaskId(null);
-    }, 0);
+    const completeTimer = window.setTimeout(() => finishFocus(), 0);
     return () => window.clearTimeout(completeTimer);
-  }, [date, focusSeconds, focusStartedAt, focusTask]);
+  }, [focusSeconds, focusTask]);
 
   const update = (patch: Partial<DayPlan>) => {
-    if (locked) return;
-    setPlan((current) => {
-      const next = { ...current, ...patch };
-      return saveDailyPlan(date, next);
-    });
+    if (locked || savingLock) return;
+    persistPlan({ ...plan, ...patch });
   };
   const startFocus = (taskId: number) => {
     setFocusTaskId(taskId);
@@ -372,21 +434,20 @@ function PlanWorkspace() {
     setFocusSeconds(25 * 60);
     setFocusPaused(false);
   };
-  const changeDate = (nextDate: string) => {
+  const changeDate = async (nextDate: string) => {
+    if (!nextDate || savingLock || !(await retryDrafts())) return;
     setDate(nextDate);
     setPlan(loadPlanWithYesterdayRemarks(nextDate));
     setWeeklyPriorities(loadWeeklyPriorities(getWeekRange(nextDate).weekStart).priorities);
     setMessage("");
+    setActionSaveFailed(false);
     setFocusTaskId(null);
   };
   const updateWeeklyPriority = (index: number, value: string) => {
     if (locked) return;
-    setWeeklyPriorities((current) => {
-      const next = [...current] as [string, string, string];
-      next[index] = value;
-      saveWeeklyPriorities(getWeekRange(date).weekStart, next);
-      return next;
-    });
+    const next: [string, string, string] = [...weeklyPriorities];
+    next[index] = value;
+    persistWeeklyPriorities(next);
   };
   const addTask = () =>
     update({
@@ -414,59 +475,54 @@ function PlanWorkspace() {
         { id: createPlanItemId(), time: "", activity: "", minutes: 0 },
       ],
     });
-  const save = () => {
+  const save = async () => {
+    if (savingLock) return;
     if (missingRequiredTerms.length) {
       setMessage(
         `保存前请在当前安排中加入“复习”和“反思”事项。当前缺少：${missingRequiredTerms.join("、")}。`,
       );
       return;
     }
-    const next = { ...plan, locked: true };
-    setPlan(saveDailyPlan(date, next));
-    setMessage("当前安排已保存并锁定。需要调整时点击“修改”。");
+    setSavingLock(true);
+    try {
+      if (!(await retryDrafts()) || !persistPlan({ ...plan, locked: true }, false)) return;
+      await flushBrowserRecords();
+      setMessage("当前安排已保存并锁定。需要调整时点击“修改”。");
+    } catch {
+      setPlanSaveFailed(true);
+    } finally {
+      setSavingLock(false);
+    }
   };
   const unlock = () => {
-    setPlan((current) => {
-      const next = { ...current, locked: false };
-      return saveDailyPlan(date, next);
-    });
-    setMessage("已进入修改状态，所有更改会自动保存草稿。");
+    if (persistPlan({ ...plan, locked: false }, false)) {
+      setMessage("已进入修改状态，所有更改会自动保存草稿。");
+    }
   };
   const toggleRemarkDone = (id: string) => {
-    setPlan((current) => {
-      const item = buildRemarkItems(
-        current.remarks,
-        current.remarkChecks,
-      ).find((candidate) => candidate.id === id);
-      const done = !current.remarkChecks[id];
-      if (item) {
-        setCompletionStatus(
-          {
-            id: remarkCompletionId(date, item.text),
-            kind: "remark",
-            title: item.text,
-            completedDate: date,
-            sourceDate: date,
-          },
-          done,
-        );
-      }
-      const next = {
-        ...current,
-        remarkChecks: {
-          ...current.remarkChecks,
-          [id]: done,
+    const item = remarkItems.find((candidate) => candidate.id === id);
+    if (!item) return;
+    const done = !item.done;
+    if (
+      archiveCompletion(
+        {
+          id: remarkCompletionId(date, item.text),
+          kind: "remark",
+          title: item.text,
+          completedDate: date,
+          sourceDate: date,
         },
-      };
-      return saveDailyPlan(date, next);
-    });
+        done,
+      )
+    ) {
+      persistPlan({ ...plan, remarkChecks: { ...plan.remarkChecks, [id]: done } });
+    }
   };
   const removeCompletedRemark = (id: string) => {
-    setPlan((current) => {
-      const items = buildRemarkItems(current.remarks, current.remarkChecks);
-      const removed = items.find((item) => item.id === id);
-      if (!removed?.done) return current;
-      setCompletionStatus(
+    const removed = remarkItems.find((item) => item.id === id);
+    if (!removed?.done) return;
+    if (
+      !archiveCompletion(
         {
           id: remarkCompletionId(date, removed.text),
           kind: "remark",
@@ -475,26 +531,27 @@ function PlanWorkspace() {
           sourceDate: date,
         },
         true,
-      );
-      const remaining = items.filter((item) => item.id !== id);
-      const remarkChecks = Object.fromEntries(
-        remaining
-          .map((item, index) => [`${index}:${item.text}`, item.done] as const)
-          .filter((entry) => entry[1]),
-      );
-      const next = {
-        ...current,
-        remarks: remarkItemsToHtml(remaining),
-        remarkChecks,
-      };
-      return saveDailyPlan(date, next);
-    });
-    setMessage("已从今日备注移除，并保留在完成汇总中。");
+      )
+    ) return;
+    const remaining = remarkItems.filter((item) => item.id !== id);
+    const remarkChecks = Object.fromEntries(
+      remaining
+        .map((item, index) => [`${index}:${item.text}`, item.done] as const)
+        .filter((entry) => entry[1]),
+    );
+    if (persistPlan({ ...plan, remarks: remarkItemsToHtml(remaining), remarkChecks })) {
+      setMessage("已从今日备注移除，并保留在完成汇总中。");
+    }
   };
   const changeTask = (task: Task, patch: Partial<Task>) => {
     const nextTask = { ...task, ...patch };
+    update({
+      tasks: plan.tasks.map((item) =>
+        item.id === task.id ? nextTask : item,
+      ),
+    });
     if (nextTask.text.trim()) {
-      setCompletionStatus(
+      archiveCompletion(
         {
           id: `plan-task:${date}:${task.id}`,
           kind: "plan-task",
@@ -505,16 +562,11 @@ function PlanWorkspace() {
         nextTask.done,
       );
     }
-    update({
-      tasks: plan.tasks.map((item) =>
-        item.id === task.id ? nextTask : item,
-      ),
-    });
   };
   const toggleTaskDone = (task: Task) => {
     const done = !task.done;
     if (task.text.trim()) {
-      setCompletionStatus(
+      if (!archiveCompletion(
         {
           id: `plan-task:${date}:${task.id}`,
           kind: "plan-task",
@@ -523,21 +575,16 @@ function PlanWorkspace() {
           sourceDate: date,
         },
         done,
-      );
+      )) return;
     }
-    setPlan((current) => {
-      const next = {
-        ...current,
-        tasks: current.tasks.map((item) =>
-          item.id === task.id ? { ...item, done } : item,
-        ),
-      };
-      return saveDailyPlan(date, next);
+    persistPlan({
+      ...plan,
+      tasks: plan.tasks.map((item) => item.id === task.id ? { ...item, done } : item),
     });
   };
   const removeTask = (task: Task) => {
     if (task.done && task.text.trim()) {
-      setCompletionStatus(
+      if (!archiveCompletion(
         {
           id: `plan-task:${date}:${task.id}`,
           kind: "plan-task",
@@ -546,20 +593,14 @@ function PlanWorkspace() {
           sourceDate: date,
         },
         true,
-      );
+      )) return;
     }
-    setPlan((current) => {
-      const next = {
-        ...current,
-        tasks: current.tasks.filter((item) => item.id !== task.id),
-      };
-      return saveDailyPlan(date, next);
-    });
-    if (task.done) setMessage("已移除完成待办，记录仍保留在完成汇总中。");
+    const saved = persistPlan({ ...plan, tasks: plan.tasks.filter((item) => item.id !== task.id) });
+    if (saved && task.done) setMessage("已移除完成待办，记录仍保留在完成汇总中。");
   };
   const removeActual = (row: ActualRow) => {
     if (row.activity.trim()) {
-      setCompletionStatus(
+      if (!archiveCompletion(
         {
           id: `plan-actual:${date}:${row.id}`,
           kind: "actual",
@@ -569,7 +610,7 @@ function PlanWorkspace() {
           detail: row.minutes ? `${row.minutes} 分钟` : undefined,
         },
         true,
-      );
+      )) return;
     }
     update({ actual: plan.actual.filter((item) => item.id !== row.id) });
   };
@@ -582,7 +623,7 @@ function PlanWorkspace() {
       ? "明天计划"
       : `${date}计划`;
   const divider = {
-    "--plan-divider": locked ? "#b9d7c0" : "#bd6879",
+    "--plan-divider": planSaveFailed || weeklySaveFailed ? "#bd6879" : "#b9d7c0",
   } as CSSProperties;
 
   return (
@@ -612,12 +653,13 @@ function PlanWorkspace() {
             <>
               <span className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dfe5df] bg-white px-3 text-sm text-[#65736a] shadow-sm">
                 <Lock size={15} />
-                已保存
+                {savingLock ? "正在保存…" : planSaveFailed || weeklySaveFailed ? "尚未保存" : "已保存"}
               </span>
               <Button
                 type="button"
                 variant="outline"
                 size="lg"
+                disabled={savingLock}
                 onClick={unlock}
               >
                 <Pencil data-icon="inline-start" />
@@ -629,13 +671,14 @@ function PlanWorkspace() {
               <Button
                 type="button"
                 size="lg"
+                disabled={savingLock}
                 onClick={save}
               >
                 <Save data-icon="inline-start" />
                 保存并锁定
               </Button>
               {missingRequiredTerms.length ? (
-                <p className="w-full text-right text-xs text-[#bd6879]">
+                <p className="w-full text-right text-xs text-muted-foreground">
                   保存前还需加入：{missingRequiredTerms.join("、")}
                 </p>
               ) : null}
@@ -643,6 +686,20 @@ function PlanWorkspace() {
           )}
         </div>
       </div>
+      {planSaveFailed || weeklySaveFailed || actionSaveFailed ? (
+        <div role="alert" className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-[#e4c6cc] bg-[#fff3f5] px-4 py-3 text-sm text-[#86394a]">
+          <p>
+            {planSaveFailed || weeklySaveFailed
+              ? "更改尚未保存，草稿仍在当前页面。请保留此页面，稍后重试。"
+              : "浏览器暂时无法保存，请稍后再试刚才的操作。"}
+          </p>
+          {planSaveFailed || weeklySaveFailed ? (
+            <Button type="button" size="sm" variant="outline" onClick={retryDrafts}>
+              重试保存
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <section
         style={divider}
         className="mt-7 overflow-hidden rounded-lg border border-[#d8d8d0] bg-[#fffefb] shadow-sm"
@@ -659,7 +716,7 @@ function PlanWorkspace() {
           </label>
           <span className="text-sm text-[#65736a]">{weekday}</span>
           <span
-            className={`ml-auto text-sm ${locked ? "text-[#4f7c5a]" : "text-[#bd6879]"}`}
+            className="ml-auto text-sm text-[#4f7c5a]"
           >
             {locked ? "已锁定，可点击修改" : "草稿会自动保存"}
           </span>

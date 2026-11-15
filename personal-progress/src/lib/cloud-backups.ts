@@ -1,3 +1,4 @@
+import { browserRecords } from "@/lib/browser-records";
 import { getSupabaseClient } from "@/lib/supabase";
 import { listDiariesRemote } from "@/lib/diary-supabase";
 import { writeAccountRecords } from "@/lib/account-storage";
@@ -59,7 +60,7 @@ async function getAuthenticatedClient() {
 
 /** Reads the complete account snapshot without changing browser or cloud data. */
 export async function collectAllRecordsForExport(): Promise<ExportRecordsResult> {
-  const localRecords = collectStoredRecords(window.localStorage);
+  const localRecords = collectStoredRecords(browserRecords);
   const auth = await getAuthenticatedClient();
   if (!auth.ok) {
     return { records: localRecords, source: "browser-only" };
@@ -146,7 +147,7 @@ export async function restoreCloudRecordBackup(
 
   const recoveredRecords = sanitizeStoredRecords(data.records);
   const mergedRecords = mergeRecoveredRecords(
-    collectStoredRecords(window.localStorage),
+    collectStoredRecords(browserRecords),
     recoveredRecords,
   );
 
@@ -165,8 +166,8 @@ export async function restoreCloudRecordBackup(
       message: restoreError.message,
     };
   }
-  replaceStoredRecords(window.localStorage, mergedRecords);
-  writeAccountRecords(window.localStorage, auth.userId, mergedRecords);
+  replaceStoredRecords(browserRecords, mergedRecords);
+  writeAccountRecords(browserRecords, auth.userId, mergedRecords);
   dispatchStorageChanges(window);
   return {
     ok: true,
@@ -192,7 +193,7 @@ export async function recoverCurrentCloudRecords(): Promise<
 
   const recoveredRecords = sanitizeStoredRecords(data.records);
   const mergedRecords = mergeRecoveredRecords(
-    collectStoredRecords(window.localStorage),
+    collectStoredRecords(browserRecords),
     recoveredRecords,
   );
   const { error: saveError } = await auth.client.from("user_records").upsert(
@@ -205,8 +206,8 @@ export async function recoverCurrentCloudRecords(): Promise<
   );
   if (saveError) return { ok: false, reason: "query-failed", message: saveError.message };
 
-  replaceStoredRecords(window.localStorage, mergedRecords);
-  writeAccountRecords(window.localStorage, auth.userId, mergedRecords);
+  replaceStoredRecords(browserRecords, mergedRecords);
+  writeAccountRecords(browserRecords, auth.userId, mergedRecords);
   dispatchStorageChanges(window);
   return {
     ok: true,
@@ -248,7 +249,7 @@ export async function recoverRemoteDiaries(): Promise<
     }))),
   };
   const mergedRecords = mergeRecoveredRecords(
-    collectStoredRecords(window.localStorage),
+    collectStoredRecords(browserRecords),
     recoveredRecords,
   );
   const { error } = await auth.client.from("user_records").upsert(
@@ -261,8 +262,8 @@ export async function recoverRemoteDiaries(): Promise<
   );
   if (error) return { ok: false, reason: "query-failed", message: error.message };
 
-  replaceStoredRecords(window.localStorage, mergedRecords);
-  writeAccountRecords(window.localStorage, auth.userId, mergedRecords);
+  replaceStoredRecords(browserRecords, mergedRecords);
+  writeAccountRecords(browserRecords, auth.userId, mergedRecords);
   dispatchStorageChanges(window);
   return {
     ok: true,

@@ -33,21 +33,21 @@ function canUseStorage() {
 export function listJournals(): JournalEntry[] {
   if (!canUseStorage()) return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEYS.journals) ?? "[]";
+    const raw = browserRecords.getItem(STORAGE_KEYS.journals) ?? "[]";
     if (raw === cachedRaw) return cachedEntries;
     cachedRaw = raw;
     const indexed = JSON.parse(raw) as JournalEntry[];
     const dates = new Set(indexed.map((entry) => entry.date));
-    const legacy = Object.keys(window.localStorage).flatMap((key) => {
+    const legacy = browserRecordKeys().flatMap((key) => {
       if (!key.startsWith("journal:")) return [];
       const date = key.slice("journal:".length);
-      const content = window.localStorage.getItem(key) ?? "";
+      const content = browserRecords.getItem(key) ?? "";
       if (!content || dates.has(date)) return [];
       return [
         {
           date,
           content,
-          mood: window.localStorage.getItem(`mood:${date}`) ?? "平静",
+          mood: browserRecords.getItem(`mood:${date}`) ?? "平静",
           updatedAt: new Date().toISOString(),
         },
       ];
@@ -75,17 +75,18 @@ export function saveJournal(entry: Omit<JournalEntry, "updatedAt">) {
     createdAt: entry.createdAt ?? existing?.createdAt ?? `${entry.date}T12:00:00`,
     updatedAt: now,
   }, ...current];
-  window.localStorage.setItem(STORAGE_KEYS.journals, JSON.stringify(next));
+  browserRecords.setItem(STORAGE_KEYS.journals, JSON.stringify(next));
   cachedRaw = null;
   window.dispatchEvent(new Event(STORAGE_EVENTS.journalsChanged));
+  return next[0];
 }
 
 export function deleteJournal(date: string) {
   const next = listJournals().filter((entry) => entry.date !== date);
-  window.localStorage.setItem(STORAGE_KEYS.journals, JSON.stringify(next));
+  browserRecords.setItem(STORAGE_KEYS.journals, JSON.stringify(next));
   // Remove records written by older versions of the app as well.
-  window.localStorage.removeItem(`journal:${date}`);
-  window.localStorage.removeItem(`mood:${date}`);
+  browserRecords.removeItem(`journal:${date}`);
+  browserRecords.removeItem(`mood:${date}`);
   cachedRaw = null;
   window.dispatchEvent(new Event(STORAGE_EVENTS.journalsChanged));
 }
@@ -110,4 +111,5 @@ export function todayKey(now = new Date()) {
     parts.find((part) => part.type === type)?.value ?? "";
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
+import { browserRecordKeys, browserRecords } from "@/lib/browser-records";
 import { STORAGE_EVENTS, STORAGE_KEYS } from "@/lib/storage-contract";
