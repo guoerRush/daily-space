@@ -267,6 +267,14 @@ async function deviceSync() {
   assert.deepEqual(JSON.parse(phone.getItem(key)).map(x => x.date), [right.date, left.date]);
   assert.equal(JSON.parse(phone.getItem(key))[0].content, "edited");
   assert.deepEqual(JSON.parse(phone.getItem(key))[1].images, left.images);
+  const { readFitnessReflections, saveFitnessReflection } = load("@/lib/fitness-reflections");
+  saveFitnessReflection("2026-11-14", "手机训练后反思", phone);
+  saveFitnessReflection("2026-11-15", "电脑休息日反思", desktop);
+  await Promise.all([a.sync(), b.sync()]); await a.sync(); await b.sync();
+  assert.deepEqual(readFitnessReflections(phone).map(item => item.text), ["电脑休息日反思", "手机训练后反思"]);
+  assert.deepEqual(readFitnessReflections(desktop), readFitnessReflections(phone));
+  desktop.setItem("daily-space:fitness-reflection:damaged", "invalid JSON");
+  assert.equal(readFitnessReflections(desktop).length, 2);
   // No visible incoming writes are applied on a failed upload; local drafts survive.
   phone.setItem(p1, "offline pending"); client.fail = true;
   await assert.rejects(a.sync());
@@ -281,7 +289,7 @@ async function deviceSync() {
   phone.removeItem(p1); await a.sync(); await b.sync();
   assert.equal(desktop.getItem(p1), null);
   a.dispose(); b.dispose();
-  console.log("PASS two devices: concurrent writes, clock skew, offline retry, in-flight edits, per-date journal merging, deletion and photo preservation");
+  console.log("PASS two devices: concurrent writes, clock skew, offline retry, in-flight edits, per-date journal and fitness reflection merging, deletion and photo preservation");
 }
 
 (async () => { planStorageQuota(); await fitness(); await photos(); await deviceSync(); })().catch((error) => { console.error(error); process.exitCode = 1; });

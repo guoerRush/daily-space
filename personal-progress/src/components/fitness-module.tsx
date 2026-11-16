@@ -1,6 +1,8 @@
 "use client";
 
 import { FITNESS_DRAFT_KEY, readFitnessHistory, saveFitnessHistory, type WeightHistory } from "@/lib/fitness-history";
+import { readFitnessReflections, saveFitnessReflection, type FitnessReflection } from "@/lib/fitness-reflections";
+import { flushBrowserRecords } from "@/lib/browser-records";
 import { STORAGE_EVENTS } from "@/lib/storage-contract";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
@@ -32,6 +34,13 @@ export function FitnessModule({ initialDate }: { initialDate: string }) {
   const activeIndex = cycleIndex(today);
   const [weights, setWeights] = useState<Record<string, string>>({});
   const [weightHistory, setWeightHistory] = useState<WeightHistory[]>([]);
+  const [reflections, setReflections] = useState<FitnessReflection[]>([]);
+  const [reflectionText, setReflectionText] = useState("");
+  const [reflectionSavedAt, setReflectionSavedAt] = useState("");
+  const [reflectionSaving, setReflectionSaving] = useState(false);
+  const [reflectionError, setReflectionError] = useState("");
+  const reflectionDirty = useRef(false);
+  const reflectionRevision = useRef(0);
   const [savedDate, setSavedDate] = useState("");
   const saved = savedDate === today;
   const dirty = useRef(false);
@@ -42,6 +51,9 @@ export function FitnessModule({ initialDate }: { initialDate: string }) {
       try {
         const history = readFitnessHistory();
         setWeightHistory(history);
+        const savedReflections = readFitnessReflections();
+        setReflections(savedReflections);
+        if (!reflectionDirty.current) setReflectionText(savedReflections.find((item) => item.date === today)?.text ?? "");
         if (!dirty.current) setWeights(history[0]?.values ?? JSON.parse(localStorage.getItem(FITNESS_DRAFT_KEY) || "{}"));
       }
       catch { setError("历史读取失败，请刷新重试。"); }
@@ -54,7 +66,27 @@ export function FitnessModule({ initialDate }: { initialDate: string }) {
       window.removeEventListener(STORAGE_EVENTS.fitnessChanged, refresh);
       window.removeEventListener("storage", refresh);
     };
-  }, []);
+  }, [today]);
+
+  async function saveReflection() {
+    if (reflectionSaving || !reflectionText.trim()) return;
+    const revision = reflectionRevision.current;
+    setReflectionSaving(true);
+    try {
+      const savedReflection = saveFitnessReflection(today, reflectionText);
+      await flushBrowserRecords();
+      if (revision === reflectionRevision.current) {
+        reflectionDirty.current = false;
+        setReflectionSavedAt(savedReflection.updatedAt);
+      }
+      setReflections(readFitnessReflections());
+      setReflectionError("");
+    } catch {
+      setReflectionError("反思尚未保存，请保留此页面并重试。");
+    } finally {
+      setReflectionSaving(false);
+    }
+  }
 
   function updateWeight(key: string, value: string) {
     dirty.current = true;
@@ -89,6 +121,14 @@ export function FitnessModule({ initialDate }: { initialDate: string }) {
       <div className="grid gap-4 p-5 md:p-6">{cycle.map((day, dayIndex) => <article key={day.label} className={`rounded-xl border p-4 ${activeIndex === dayIndex ? "border-[#82ab8d] bg-[#f4faf5] shadow-sm" : "border-[#e2e9e4] bg-white"}`}><div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e9e4] pb-3"><div><p className="text-xs font-medium text-[#718077]">{day.label}</p><h3 className="text-lg font-semibold text-[#315944]">{day.title}</h3></div>{activeIndex === dayIndex && <span className="rounded-full bg-[#dcefe0] px-3 py-1 text-xs font-medium text-[#2f6651]">今天训练</span>}</div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{day.groups.map(([group, exercises]) => <div key={group} className="rounded-lg border border-[#e2e9e4] bg-[#fbfdfb] p-3"><h4 className="mb-2 font-medium text-[#315944]">{group}</h4><div className="grid gap-2">{exercises.map((exercise) => { const key = `${day.label}-${group}-${exercise}`; return <label key={key} className="grid gap-1 text-sm text-[#5d7665]"><span>{exercise}</span><input value={weights[key] ?? ""} onChange={(event) => updateWeight(key, event.target.value)} placeholder="填写当前重量 / 备注" className="w-full rounded-md border border-[#d8e2dc] bg-white px-3 py-2 text-sm text-[#31473a] outline-none transition placeholder:text-[#a2b1a7] focus:border-[#72a17f] focus:ring-2 focus:ring-[#dcefe0]" /></label>; })}</div></div>)}</div></article>)}<div className="flex flex-wrap items-center gap-3 rounded-lg bg-[#f4f8f4] px-4 py-3 text-sm text-[#718077]"><CheckCircle2 size={16} className="text-[#4f8b5d]" />第 4 天休息，完成后自动回到第 1 天。<button type="button" onClick={saveWeights} className="rounded-md bg-[#2f6651] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#285945]">保存当前重量</button>{saved && <span className="text-[#4f8b5d]">已保存 {today}</span>}</div></div>
       {error ? <p role="alert" className="p-4 text-destructive">{error}</p> : null}
       {weightHistory.length ? <div className="border-t border-[#e2e9e4] bg-[#fbfdfb] px-5 py-4 md:px-6"><h3 className="font-semibold text-[#315944]">历史重量记录</h3><div className="mt-3 grid gap-2">{weightHistory.map((record) => <details key={record.date} className="rounded-lg border border-[#e2e9e4] bg-white px-3 py-2"><summary className="cursor-pointer text-sm font-medium text-[#315944]">{record.date} · {Object.keys(record.values).length} 项记录</summary><div className="mt-2 grid gap-1 border-t border-[#eef2ee] pt-2 text-xs text-[#718077]">{Object.entries(record.values).map(([key, value]) => <p key={key}><span className="text-[#4f6655]">{key.replace(/^第 [123] 天-/, "")}</span>：{value}</p>)}</div></details>)}</div></div> : null}
+      <div className="border-t border-[#e2e9e4] px-5 py-5 md:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold text-[#315944]">每日反思</h3><p className="mt-1 text-sm text-[#718077]">记录今天的训练感受和下次要调整的地方。休息日也可以写。</p></div><span className="text-xs text-[#718077]">{today}</span></div>
+        <label htmlFor="fitness-reflection" className="sr-only">今日健身反思</label>
+        <textarea id="fitness-reflection" value={reflectionText} onChange={(event) => { reflectionRevision.current += 1; reflectionDirty.current = true; setReflectionText(event.target.value); setReflectionSavedAt(""); }} placeholder="今天的状态、动作要点、下次想调整什么……" rows={5} className="mt-4 w-full resize-y rounded-lg border border-[#d8e2dc] bg-[#fbfdfb] px-3 py-3 text-sm leading-6 text-[#31473a] outline-none placeholder:text-[#a2b1a7] focus:border-[#72a17f] focus:ring-2 focus:ring-[#dcefe0]" />
+        <div className="mt-3 flex flex-wrap items-center gap-3"><button type="button" onClick={() => void saveReflection()} disabled={reflectionSaving || !reflectionText.trim()} className="inline-flex items-center gap-2 rounded-md bg-[#2f6651] px-4 py-2 text-sm font-medium text-white hover:bg-[#285945] disabled:opacity-50"><Save size={15} />{reflectionSaving ? "正在保存…" : "保存今日反思"}</button>{reflectionSavedAt ? <span className="text-xs text-[#4f8b5d]">已保存 {today} · {new Date(reflectionSavedAt).toLocaleTimeString("zh-CN")}</span> : null}</div>
+        {reflectionError ? <p role="alert" className="mt-2 text-sm text-destructive">{reflectionError}</p> : null}
+      </div>
+      <div className="border-t border-[#e2e9e4] bg-[#fbfdfb] px-5 py-5 md:px-6"><h3 className="font-semibold text-[#315944]">历史反思</h3>{reflections.length ? <div className="mt-3 grid gap-2">{reflections.map((record) => <details key={record.date} className="rounded-lg border border-[#e2e9e4] bg-white px-3 py-2"><summary className="cursor-pointer text-sm font-medium text-[#315944]">{record.date}</summary><p className="mt-2 whitespace-pre-wrap border-t border-[#eef2ee] pt-2 text-sm leading-6 text-[#4f6655]">{record.text}</p><p className="mt-2 text-xs text-[#718077]">保存于 {new Date(record.updatedAt).toLocaleString("zh-CN")}</p></details>)}</div> : <p className="mt-3 text-sm text-[#718077]">保存第一条反思后，会按日期显示在这里。</p>}</div>
       <div className="flex items-center gap-2 border-t border-[#e2e9e4] px-5 py-3 text-xs text-[#718077] md:px-6"><RotateCcw size={13} />按日期保留全部记录，登录后参与账号同步。</div>
     </section>
   );

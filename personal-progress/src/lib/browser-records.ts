@@ -68,6 +68,7 @@ export async function flushBrowserRecords(): Promise<void> {
 function canOverflow(key: string) {
   return key === STORAGE_KEYS.journals ||
     key === STORAGE_KEYS.completionHistory ||
+    key.startsWith("daily-space:fitness-reflection:") ||
     key.startsWith("__daily_space_internal__:v1:") ||
     key.startsWith(STORAGE_KEYS.planPrefix) ||
     key.startsWith(STORAGE_KEYS.weeklyPrioritiesPrefix);
