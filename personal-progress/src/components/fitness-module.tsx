@@ -35,6 +35,7 @@ export function FitnessModule({ initialDate }: { initialDate: string }) {
   const [weights, setWeights] = useState<Record<string, string>>({});
   const [weightHistory, setWeightHistory] = useState<WeightHistory[]>([]);
   const [reflections, setReflections] = useState<FitnessReflection[]>([]);
+  const pastReflections = reflections.filter((record) => record.date !== today);
   const [reflectionText, setReflectionText] = useState("");
   const [reflectionSavedAt, setReflectionSavedAt] = useState("");
   const [reflectionSaving, setReflectionSaving] = useState(false);
@@ -128,7 +129,13 @@ export function FitnessModule({ initialDate }: { initialDate: string }) {
         <div className="mt-3 flex flex-wrap items-center gap-3"><button type="button" onClick={() => void saveReflection()} disabled={reflectionSaving || !reflectionText.trim()} className="inline-flex items-center gap-2 rounded-md bg-[#2f6651] px-4 py-2 text-sm font-medium text-white hover:bg-[#285945] disabled:opacity-50"><Save size={15} />{reflectionSaving ? "正在保存…" : "保存今日反思"}</button>{reflectionSavedAt ? <span className="text-xs text-[#4f8b5d]">已保存 {today} · {new Date(reflectionSavedAt).toLocaleTimeString("zh-CN")}</span> : null}</div>
         {reflectionError ? <p role="alert" className="mt-2 text-sm text-destructive">{reflectionError}</p> : null}
       </div>
-      <div className="border-t border-[#e2e9e4] bg-[#fbfdfb] px-5 py-5 md:px-6"><h3 className="font-semibold text-[#315944]">历史反思</h3>{reflections.length ? <div className="mt-3 grid gap-2">{reflections.map((record) => <details key={record.date} className="rounded-lg border border-[#e2e9e4] bg-white px-3 py-2"><summary className="cursor-pointer text-sm font-medium text-[#315944]">{record.date}</summary><p className="mt-2 whitespace-pre-wrap border-t border-[#eef2ee] pt-2 text-sm leading-6 text-[#4f6655]">{record.text}</p><p className="mt-2 text-xs text-[#718077]">保存于 {new Date(record.updatedAt).toLocaleString("zh-CN")}</p></details>)}</div> : <p className="mt-3 text-sm text-[#718077]">保存第一条反思后，会按日期显示在这里。</p>}</div>
+      <details className="group border-t border-[#e2e9e4] bg-[#fbfdfb] px-5 py-5 md:px-6">
+        <summary className="flex cursor-pointer list-none items-center justify-between font-semibold text-[#315944] [&::-webkit-details-marker]:hidden">
+          <span>历史反思{pastReflections.length ? `（${pastReflections.length} 天）` : ""}</span>
+          <span aria-hidden="true" className="text-sm transition-transform group-open:rotate-180">⌄</span>
+        </summary>
+        {pastReflections.length ? <div className="mt-3 grid gap-2">{pastReflections.map((record) => <details key={record.date} className="rounded-lg border border-[#e2e9e4] bg-white px-3 py-2"><summary className="cursor-pointer text-sm font-medium text-[#315944]">{record.date}</summary><p className="mt-2 whitespace-pre-wrap border-t border-[#eef2ee] pt-2 text-sm leading-6 text-[#4f6655]">{record.text}</p><p className="mt-2 text-xs text-[#718077]">保存于 {new Date(record.updatedAt).toLocaleString("zh-CN")}</p></details>)}</div> : <p className="mt-3 text-sm text-[#718077]">此前还没有保存的反思。</p>}
+      </details>
       <div className="flex items-center gap-2 border-t border-[#e2e9e4] px-5 py-3 text-xs text-[#718077] md:px-6"><RotateCcw size={13} />按日期保留全部记录，登录后参与账号同步。</div>
     </section>
   );
