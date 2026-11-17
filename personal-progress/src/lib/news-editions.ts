@@ -2,11 +2,12 @@ import { type NewsBrief } from "@/lib/news-brief";
 import { getServiceSupabaseClient } from "@/lib/supabase-server";
 
 const bucketName = "daily-news-editions";
+const issuePath = (date: string) => `issues/v2/${date}.json`;
 
 export async function readPublishedNews(date: string): Promise<NewsBrief | null> {
   const client = getServiceSupabaseClient();
   if (!client) return null;
-  const { data } = await client.storage.from(bucketName).download(`issues/${date}.json`);
+  const { data } = await client.storage.from(bucketName).download(issuePath(date));
   if (!data) return null;
   const brief = JSON.parse(await data.text()) as NewsBrief;
   return brief.date === date && brief.items ? brief : null;
@@ -20,7 +21,7 @@ export async function publishNews(brief: NewsBrief) {
   const client = getServiceSupabaseClient();
   if (!client) throw new Error("缺少简报存储配置");
   const bucket = client.storage.from(bucketName);
-  const path = `issues/${brief.date}.json`;
+  const path = issuePath(brief.date);
   const options = { contentType: "application/json", upsert: false };
   const body = JSON.stringify(brief);
   let { error } = await bucket.upload(path, body, options);

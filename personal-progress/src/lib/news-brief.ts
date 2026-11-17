@@ -4,25 +4,32 @@ export const newsSections = [
   { title: "时政与国际", topics: ["中国", "美国", "俄罗斯", "其他国际要闻"] },
 ] as const;
 
-export type NewsTopic = (typeof newsSections)[number]["topics"][number];
+export type NewsTopic = (typeof newsSections)[number]["topics"][number] | "中美俄" | "AI政策";
+
+export type NewsItem = {
+  title: string;
+  summary: string;
+  source: string;
+  url: string;
+  publishedAt: string;
+  context?: string;
+  next?: { text: string; source: string; url: string };
+};
 
 export type NewsBrief = {
   date: string;
   generatedAt: string;
-  items: Partial<Record<NewsTopic, {
-    title: string;
-    summary: string;
-    source: string;
-    url: string;
-    publishedAt: string;
-  }>>;
+  items: Partial<Record<NewsTopic, NewsItem>>;
+  order?: NewsTopic[];
 };
 
-export const marketWatch: Partial<Record<NewsTopic, string>> = {
-  黄金: "观察美元、美国实际利率与避险需求。美元或实际利率走高时，金价通常会承压。",
-  纳指与标普500: "关注美债收益率与企业财报。科技股权重较高，纳指对大型科技公司业绩更敏感。",
-  A股与宏观: "关注国内经济数据、政策落地和人民币汇率变化。",
-};
+export function orderedNews(brief: NewsBrief) {
+  const order = brief.order ?? newsSections.flatMap((section) => [...section.topics]);
+  return order.flatMap((topic) => {
+    const item = brief.items[topic];
+    return item ? [{ ...item, topic }] : [];
+  });
+}
 
 export function formatNewsTime(date: string, options: Intl.DateTimeFormatOptions) {
   return new Intl.DateTimeFormat("zh-CN", { ...options, timeZone: "Asia/Shanghai" }).format(new Date(date));

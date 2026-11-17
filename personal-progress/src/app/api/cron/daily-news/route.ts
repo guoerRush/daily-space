@@ -1,28 +1,22 @@
 import { timingSafeEqual } from "node:crypto";
 import { sendFeishuReminder } from "@/lib/feishu";
 import { todayKey } from "@/lib/journals";
-import { marketWatch, newsSections, type NewsBrief } from "@/lib/news-brief";
+import { orderedNews, type NewsBrief } from "@/lib/news-brief";
 import { claimNewsDelivery, publishNews, readPublishedNews } from "@/lib/news-editions";
+import { getEditorialNews } from "@/lib/news-editorial";
 import { buildNewsBrief } from "@/lib/news-sources";
 
 export const maxDuration = 45;
 
 function message(brief: NewsBrief) {
-  const lines = [`日常留白 · ${brief.date} 每日新闻（北京时间）`];
-  for (const section of newsSections) {
-    lines.push(`\n【${section.title}】`);
-    for (const topic of section.topics) {
-      const item = brief.items[topic];
-      if (!item) {
-        lines.push(`${topic} · 暂无符合条件的近期报道`);
-        continue;
-      }
-      lines.push(`${topic} · ${item.title}`);
-      if (item.summary && item.summary !== item.title) lines.push(item.summary);
-      lines.push(`${item.source} ${item.url}`);
-    }
-  }
-  lines.push(`\n市场关注点\n${Object.values(marketWatch).join("\n")}`);
+  const lines = [`日常留白 · ${brief.date} 晨间简报（北京时间）`];
+  orderedNews(brief).forEach((item, index) => {
+    lines.push(`\n${index + 1}. ${item.title}`);
+    if (item.summary && item.summary !== item.title) lines.push(item.summary);
+    if (item.context) lines.push(`关注点 · ${item.context}`);
+    if (item.next) lines.push(`${item.next.text} ${item.next.source} ${item.next.url}`);
+    lines.push(`${item.source} ${item.url}`);
+  });
   lines.push("\n查看简报：https://daily-space-six.vercel.app/#daily-news");
   return lines.join("\n");
 }
@@ -39,7 +33,7 @@ export async function GET(request: Request) {
     const date = todayKey();
     let brief = await readPublishedNews(date);
     if (!brief) {
-      const draft = await buildNewsBrief(date);
+      const draft = getEditorialNews(date) ?? await buildNewsBrief(date);
       if (Object.keys(draft.items).length === 0) {
         return Response.json({ message: "新闻来源暂不可用。" }, { status: 503 });
       }
