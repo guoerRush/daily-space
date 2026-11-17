@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { sendFeishuReminder } from "@/lib/feishu";
 import { todayKey } from "@/lib/journals";
-import { orderedNews, type NewsBrief } from "@/lib/news-brief";
+import { groupedNews, type NewsBrief } from "@/lib/news-brief";
 import { claimNewsDelivery, publishNews, readPublishedNews } from "@/lib/news-editions";
 import { getEditorialNews } from "@/lib/news-editorial";
 import { buildNewsBrief } from "@/lib/news-sources";
@@ -10,13 +10,16 @@ export const maxDuration = 45;
 
 function message(brief: NewsBrief) {
   const lines = [`日常留白 · ${brief.date} 晨间简报（北京时间）`];
-  orderedNews(brief).forEach((item, index) => {
-    lines.push(`\n${index + 1}. ${item.title}`);
-    if (item.summary && item.summary !== item.title) lines.push(item.summary);
-    if (item.context) lines.push(`关注点 · ${item.context}`);
-    if (item.next) lines.push(`${item.next.text} ${item.next.source} ${item.next.url}`);
-    lines.push(`${item.source} ${item.url}`);
-  });
+  for (const { title, stories } of groupedNews(brief)) {
+    lines.push(`\n【${title}】`);
+    stories.forEach((item, index) => {
+      lines.push(`\n${index + 1}. ${item.title}`);
+      if (item.summary && item.summary !== item.title) lines.push(item.summary);
+      if (item.context) lines.push(`关注点 · ${item.context}`);
+      if (item.next) lines.push(`${item.next.text} ${item.next.source} ${item.next.url}`);
+      lines.push(`${item.source} ${item.url}`);
+    });
+  }
   lines.push("\n查看简报：https://daily-space-six.vercel.app/#daily-news");
   return lines.join("\n");
 }

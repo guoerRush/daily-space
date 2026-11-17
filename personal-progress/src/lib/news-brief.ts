@@ -1,10 +1,10 @@
-export const newsSections = [
-  { title: "AI 与前沿", topics: ["AI", "前沿研究"] },
-  { title: "市场观察", topics: ["黄金", "纳指与标普500", "A股与宏观"] },
-  { title: "时政与国际", topics: ["中国", "美国", "俄罗斯", "其他国际要闻"] },
+const newsSections = [
+  { id: "politics", title: "中美俄与国际", topics: ["中美俄", "中国", "美国", "俄罗斯", "其他国际要闻"] },
+  { id: "markets", title: "市场观察", topics: ["纳指与标普500", "黄金", "A股与宏观"] },
+  { id: "technology", title: "AI 与前沿", topics: ["AI政策", "AI", "前沿研究"] },
 ] as const;
 
-export type NewsTopic = (typeof newsSections)[number]["topics"][number] | "中美俄" | "AI政策";
+export type NewsTopic = (typeof newsSections)[number]["topics"][number];
 
 export type NewsItem = {
   title: string;
@@ -23,11 +23,14 @@ export type NewsBrief = {
   order?: NewsTopic[];
 };
 
-export function orderedNews(brief: NewsBrief) {
-  const order = brief.order ?? newsSections.flatMap((section) => [...section.topics]);
-  return order.flatMap((topic) => {
-    const item = brief.items[topic];
-    return item ? [{ ...item, topic }] : [];
+export function groupedNews(brief: NewsBrief) {
+  return newsSections.flatMap(({ id, title, topics }) => {
+    const category: readonly NewsTopic[] = topics;
+    const stories = (brief.order ?? category).flatMap((topic) => {
+      const item = brief.items[topic];
+      return item && category.includes(topic) ? [{ ...item, topic }] : [];
+    });
+    return stories.length ? [{ id, title, stories }] : [];
   });
 }
 
