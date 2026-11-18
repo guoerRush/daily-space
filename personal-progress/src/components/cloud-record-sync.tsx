@@ -7,6 +7,7 @@ import { deactivateAccountStorage } from "@/lib/account-storage";
 import { RecordSynchronizer } from "@/lib/record-sync";
 import { dispatchStorageChanges, subscribeToStorageChanges } from "@/lib/storage-contract";
 import { getSupabaseClient } from "@/lib/supabase";
+import { CLOUD_QUOTA_MESSAGE, isCloudQuotaError } from "@/lib/cloud-errors";
 
 type Status = "pending" | "syncing" | "synced" | "error" | "offline";
 
@@ -27,13 +28,14 @@ export function CloudRecordSync() {
     let ready = false;
     let inFlight = false;
     let changed = 0;
+    let restrictedUntil = 0;
 
     const clearRetry = () => {
       window.clearTimeout(retryTimer);
       retryTimer = undefined;
     };
     const run = async () => {
-      if (!active || !synchronizer || inFlight) return;
+      if (!active || !synchronizer || inFlight || Date.now() < restrictedUntil) return;
       window.clearTimeout(timer);
       timer = undefined;
       clearRetry();
@@ -43,7 +45,7 @@ export function CloudRecordSync() {
       inFlight = true;
       setStatus(navigator.onLine ? "syncing" : "offline");
       try {
-        await flushBrowserRecords();
+        void flushBrowserRecords().catch(() => {});
         if (!ready) await next.start();
         else await next.sync();
         if (!active || currentGeneration !== generation) return;
@@ -56,10 +58,11 @@ export function CloudRecordSync() {
         console.error("Daily Space cloud sync failed.", error);
         setStatus(navigator.onLine ? "error" : "offline");
         const code = error && typeof error === "object" && "code" in error ? error.code : "";
-        setDetail(code === "42501" || code === "PGRST301"
+        if (isCloudQuotaError(error)) restrictedUntil = Date.now() + 15 * 60_000;
+        setDetail(isCloudQuotaError(error) ? CLOUD_QUOTA_MESSAGE + " 请保留本机记录，服务恢复后会继续同步。" : code === "42501" || code === "PGRST301"
           ? "登录授权已失效，请重新登录同一账号。"
           : "尚未完成云端同步，将自动重试；请保持页面打开。也可点击立即重试。");
-        retryTimer = window.setTimeout(() => { void run(); }, retryDelay);
+        retryTimer = window.setTimeout(() => { void run(); }, Math.max(retryDelay, restrictedUntil - Date.now()));
         retryDelay = Math.min(retryDelay * 2, 30_000);
       } finally {
         if (active && currentGeneration === generation) {
@@ -68,19 +71,21 @@ export function CloudRecordSync() {
         }
       }
     };
-    retry.current = () => { void run(); };
+    retry.current = () => { restrictedUntil = 0; void run(); };
     const sessionChanged = (session: { user: { id: string; email?: string } } | null) => {
       if (!active) return;
       setEmail(session?.user.email ?? "");
       if (session && synchronizer?.userId === session.user.id) return;
       generation += 1;
+      restrictedUntil = 0;
       synchronizer?.dispose();
       clearRetry();
       window.clearTimeout(timer);
       ready = false;
       inFlight = false;
       synchronizer = session ? new RecordSynchronizer(supabase, session.user.id) : null;
-      if (session) void run();
+      // Supabase holds its auth lock while notifying session listeners.
+      if (session) timer = window.setTimeout(() => { void run(); }, 0);
       else {
         deactivateAccountStorage(browserRecords);
         dispatchStorageChanges(window);
@@ -91,6 +96,10 @@ export function CloudRecordSync() {
       try {
         if (!synchronizer.captureLocalChanges()) return;
         changed += 1;
+        if (Date.now() < restrictedUntil) {
+          setStatus("error");
+          return;
+        }
         setStatus(navigator.onLine ? "pending" : "offline");
         window.clearTimeout(timer);
         timer = window.setTimeout(() => { void run(); }, 500);
@@ -116,7 +125,7 @@ export function CloudRecordSync() {
       sessionChanged(session);
     });
     const unsubscribeChanges = subscribeToStorageChanges(schedule, window);
-    const remoteRefresh = window.setInterval(refreshRemote, 15_000);
+    const remoteRefresh = window.setInterval(refreshRemote, 60_000);
     window.addEventListener("focus", refreshRemote);
     window.addEventListener("online", refreshRemote);
     window.addEventListener("offline", offline);

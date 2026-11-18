@@ -36,17 +36,21 @@ class MemoryStorage {
 // PostgREST compare-and-swap simulator, shared by isolated device stores.
 function cloudClient(rows = new Map()) {
   let revision = 0;
-  const client = { fail: false, beforeWrite: null, from: () => {
-    let mode = "read", row, id, expected;
+  const client = { fail: false, reads: [], beforeWrite: null, from: () => {
+    let mode = "read", row, id, expected, selection;
     const query = {
-      select: () => query,
+      select: value => { selection = value; return query; },
       eq: (key, value) => { if (key === "user_id") id = value; else expected = value; return query; },
       is: (key, value) => query.eq(key, value),
       insert: value => { mode = "insert"; row = value; id = value.user_id; return query; },
       update: value => { mode = "update"; row = value; return query; },
       maybeSingle: async () => {
         if (client.fail) return { error: { message: "Offline" } };
-        if (mode === "read") return { data: structuredClone(rows.get(id) ?? null) };
+        if (mode === "read") {
+          client.reads.push(selection);
+          const saved = rows.get(id);
+          return { data: saved ? structuredClone(selection === "updated_at" ? { updated_at: saved.updated_at } : saved) : null };
+        }
         if (client.beforeWrite) { const hook = client.beforeWrite; client.beforeWrite = null; await hook(); }
         if (mode === "insert" && rows.has(id)) return { error: { code: "23505" } };
         if (mode === "update" && rows.get(id)?.updated_at !== expected) return { data: null };
@@ -288,8 +292,64 @@ async function deviceSync() {
   assert.ok(notices > 0);
   phone.removeItem(p1); await a.sync(); await b.sync();
   assert.equal(desktop.getItem(p1), null);
+  client.reads.length = 0;
+  await a.sync(); await a.sync(); await a.sync();
+  assert.deepEqual(client.reads, ["updated_at", "updated_at", "updated_at"], "Unchanged history must not be downloaded again");
+  rows.delete("owner");
+  await a.sync();
+  assert.ok(rows.get("owner"), "Deleted remote row can be restored from retained local records");
   a.dispose(); b.dispose();
   console.log("PASS two devices: concurrent writes, clock skew, offline retry, in-flight edits, per-date journal and fitness reflection merging, deletion and photo preservation");
 }
 
-(async () => { planStorageQuota(); await fitness(); await photos(); await deviceSync(); })().catch((error) => { console.error(error); process.exitCode = 1; });
+async function syncTransport() {
+  const url = "https://sync-test.supabase.co";
+  let directFails = true, status = 200;
+  const calls = [];
+  const fetch = async (input, init) => {
+    const req = new Request(new URL(typeof input === "string" ? input : input.url, "https://site.test"), input instanceof Request ? input : init);
+    calls.push({ url: req.url, method: req.method, body: await req.text(), auth: req.headers.get("authorization"), key: req.headers.get("apikey") });
+    if (req.url.startsWith(url) && directFails) throw new TypeError("Failed to fetch");
+    return Response.json({ message: status === 402 ? "exceed_egress_quota" : "ok" }, { status });
+  };
+  const { createRecordSyncFetch } = loader({}, { fetch, window: { setTimeout, clearTimeout } })("@/lib/record-sync-fetch");
+  const send = createRecordSyncFetch(url);
+  await send(url + "/rest/v1/user_records?user_id=eq.owner&updated_at=eq.version", {
+    method: "PATCH", headers: { authorization: "Bearer user-token", apikey: "public-key" }, body: JSON.stringify({ records: { draft: "keep" } }),
+  });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].method, "PATCH");
+  assert.equal(calls[1].body, calls[0].body);
+  assert.equal(calls[1].auth, "Bearer user-token");
+  assert.equal(calls[1].key, null);
+  assert.ok(calls[1].url.includes("/api/record-sync?user_id=eq.owner&updated_at=eq.version"));
+  calls.length = 0; directFails = false; status = 402;
+  assert.equal((await send(url + "/rest/v1/user_records")).status, 402);
+  assert.equal(calls.length, 1, "Quota restrictions must not be retried through the proxy");
+  const errors = loader()("@/lib/cloud-errors");
+  assert.equal(errors.isCloudQuotaError({ message: "Service for this project is restricted due to exceed_egress_quota" }), true);
+  assert.ok(errors.authErrorMessage({message: "exceed_egress_quota"}).includes("不是邮箱或密码错误"));
+  console.log("PASS mobile transport: network fallback preserves body, account and CAS filters; quota errors stay explicit");
+
+  const upstream = [];
+  const routes = loader({}, { process: { env: { NEXT_PUBLIC_SUPABASE_URL: url, NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon" } }, fetch: async (input, init) => {
+    upstream.push({ url: String(input), init });
+    return Response.json([{updated_at: "2026-11-18T00:00:00Z"}]);
+  } })("@/app/api/record-sync/route");
+  const owner = "eq.00000000-0000-4000-8000-000000000001";
+  const req = (path, method = "GET", auth = "Bearer owner-token") => new Request("https://site.test/api/record-sync" + path, {method, headers: auth ? {authorization:auth} : {}, ...(method === "PATCH" ? {body:"{}"} : {})});
+  assert.equal((await routes.GET(req("", "GET", ""))).status, 401);
+  assert.equal((await routes.GET(req("?user_id=" + owner, "GET", "Bearer anon"))).status, 401);
+  assert.equal((await routes.GET(req("?user_id=not.eq.owner"))).status, 400);
+  assert.equal((await routes.PATCH(req("?user_id=" + owner, "PATCH"))).status, 400);
+  assert.equal(upstream.length, 0);
+  const res = await routes.GET(req("?user_id=" + owner + "&select=updated_at"));
+  assert.equal(res.headers.get("cache-control"), "private, no-store");
+  assert.equal(new URL(upstream[0].url).searchParams.get("select"), "updated_at");
+  assert.equal(upstream[0].init.headers.get("authorization"), "Bearer owner-token");
+  assert.equal(upstream[0].init.headers.get("apikey"), "anon");
+  assert.equal((await routes.PATCH(req("?user_id=" + owner + "&updated_at=eq.2026-11-18T00%3A00%3A00%2B00%3A00", "PATCH"))).status, 200);
+  console.log("PASS sync proxy: authentication, owner and version filters, minimal version responses, no shared cache");
+}
+
+(async () => { planStorageQuota(); await fitness(); await photos(); await deviceSync(); await syncTransport(); })().catch((error) => { console.error(error); process.exitCode = 1; });

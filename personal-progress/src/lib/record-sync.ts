@@ -212,6 +212,7 @@ export class RecordSynchronizer {
   private requested = false;
   private running: Promise<void> | null = null;
   private collisions = 0;
+  private remoteSnapshot: UserRecordRow | undefined;
 
   constructor(
     private readonly client: SupabaseClient,
@@ -268,8 +269,10 @@ export class RecordSynchronizer {
       changed = true;
     }
 
-    writeAccountRecords(this.storage, this.userId, current);
-    writeAccountSyncState(this.storage, this.userId, state);
+    if (changed) {
+      writeAccountRecords(this.storage, this.userId, current);
+      writeAccountSyncState(this.storage, this.userId, state);
+    }
     return changed;
   }
 
@@ -297,13 +300,24 @@ export class RecordSynchronizer {
 
   private async syncOnce() {
     this.captureLocalChanges();
-    const { data, error } = await this.client
-      .from("user_records")
-      .select("records,updated_at")
-      .eq("user_id", this.userId)
-      .maybeSingle<UserRecordRow>();
-
-    if (error) throw error;
+    let data: UserRecordRow | null | undefined;
+    // Most polls have no remote edits. Do not download years of records and
+    // inline photos again just to discover that the row is unchanged.
+    if (this.remoteSnapshot?.updated_at) {
+      const { data: version, error } = await this.client.from("user_records")
+        .select("updated_at").eq("user_id", this.userId)
+        .maybeSingle<{ updated_at: string | null }>();
+      if (error) throw error;
+      if (!version) data = null;
+      else if (version.updated_at === this.remoteSnapshot.updated_at) data = this.remoteSnapshot;
+    }
+    if (data === undefined) {
+      const result = await this.client.from("user_records")
+        .select("records,updated_at").eq("user_id", this.userId)
+        .maybeSingle<UserRecordRow>();
+      if (result.error) throw result.error;
+      data = result.data;
+    }
     if (!this.active) return;
 
     // Edits can arrive while the remote snapshot is being fetched.
@@ -410,6 +424,7 @@ export class RecordSynchronizer {
       }
       const { data: saved, error: saveError } = await write.select("updated_at").maybeSingle<{ updated_at: string }>();
       if ((!saveError && !saved) || saveError?.code === "23505") {
+        this.remoteSnapshot = undefined;
         if (++this.collisions > 5) throw new Error("同步冲突，请稍后重试。");
         this.requested = true;
         return;
@@ -418,6 +433,8 @@ export class RecordSynchronizer {
       if (!this.active) return;
       savedAt = validTimestamp(saved?.updated_at, savedAt);
     }
+
+    this.remoteSnapshot = { records: recordsForRemote, updated_at: savedAt };
 
     // Keep edits made while the upload was in flight, and send them next.
     const latest = collectStoredRecords(this.storage);
@@ -441,7 +458,9 @@ export class RecordSynchronizer {
       this.captureLocalChanges();
       this.requested = true;
     }
-    if (this.storage === browserRecords) await flushBrowserRecords();
+    // The cloud write has already succeeded. A stalled or expired Safari
+    // storage connection must not hide that result or block the next upload.
+    if (this.storage === browserRecords) void flushBrowserRecords().catch(() => {});
     if (this.active && visibleChanged) this.notify();
   }
 

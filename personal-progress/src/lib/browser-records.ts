@@ -7,39 +7,67 @@ let database: IDBDatabase | undefined;
 let opening: Promise<void> | undefined;
 let writing: Promise<void> | undefined;
 
+function closeDatabase(db: IDBDatabase) {
+  if (database === db) {
+    database = undefined;
+    opening = undefined;
+  }
+  db.close();
+}
+
 export function initializeBrowserRecords() {
   if (!opening) opening = new Promise<void>((resolve, reject) => {
     const request = window.indexedDB.open("daily-space-records", 1);
+    const timer = window.setTimeout(() => fail(new Error("Local record database did not respond.")), 4_000);
+    let failed = false;
+    const fail = (error: unknown) => {
+      failed = true;
+      window.clearTimeout(timer);
+      reject(error);
+    };
     request.onupgradeneeded = () => request.result.createObjectStore("overflow");
-    request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error("Local record database is blocked."));
+    request.onerror = () => fail(request.error);
+    request.onblocked = () => fail(new Error("Local record database is blocked."));
     request.onsuccess = () => {
       const db = request.result;
+      if (failed) { db.close(); return; }
+      db.onclose = () => closeDatabase(db);
+      db.onversionchange = () => closeDatabase(db);
       const cursor = db.transaction("overflow").objectStore("overflow").openCursor();
-      cursor.onerror = () => { db.close(); reject(cursor.error); };
+      cursor.onerror = () => { db.close(); fail(cursor.error); };
       cursor.onsuccess = () => {
+        if (failed) { db.close(); return; }
         const entry = cursor.result;
         if (entry) {
-          overflow.set(String(entry.key), String(entry.value));
+          const key = String(entry.key);
+          if (!overflow.has(key)) overflow.set(key, String(entry.value));
           entry.continue();
         } else {
+          window.clearTimeout(timer);
           database = db;
           resolve();
         }
       };
     };
-  });
+  }).catch((error) => { opening = undefined; throw error; });
   return opening;
 }
 
 export async function flushBrowserRecords(): Promise<void> {
   while (pending.size) {
     if (!writing) {
+      if (!database) await initializeBrowserRecords();
+      if (writing) continue;
       const db = database;
       if (!db) throw new Error("Local record database is unavailable.");
       const batch = new Map(pending);
       writing = new Promise<void>((resolve, reject) => {
         const transaction = db.transaction("overflow", "readwrite");
+        const timer = window.setTimeout(() => {
+          try { transaction.abort(); } catch { /* The browser already closed it. */ }
+          closeDatabase(db);
+          reject(new Error("Local record write did not respond."));
+        }, 4_000);
         const store = transaction.objectStore("overflow");
         try {
           for (const [key, value] of batch) {
@@ -47,18 +75,28 @@ export async function flushBrowserRecords(): Promise<void> {
             else store.put(value, key);
           }
         } catch (error) {
+          window.clearTimeout(timer);
           transaction.abort();
           reject(error);
           return;
         }
         transaction.oncomplete = () => {
+          window.clearTimeout(timer);
           for (const [key, value] of batch) {
             if (pending.get(key) === value) pending.delete(key);
             if (value === null && overflow.get(key) === null) overflow.delete(key);
           }
           resolve();
         };
-        transaction.onabort = () => reject(transaction.error ?? new Error("Local record write failed."));
+        transaction.onabort = () => {
+          window.clearTimeout(timer);
+          reject(transaction.error ?? new DOMException("Local record write failed.", "AbortError"));
+        };
+      }).catch((error) => {
+        if (error instanceof DOMException && ["InvalidStateError", "AbortError", "UnknownError"].includes(error.name)) {
+          closeDatabase(db);
+        }
+        throw error;
       }).finally(() => { writing = undefined; });
     }
     await writing;
@@ -105,6 +143,7 @@ export const browserRecords: StorageAdapter = {
     return window.localStorage.getItem(key);
   },
   setItem(key, value) {
+    if (this.getItem(key) === value) return;
     if (!overflow.has(key)) {
       try {
         window.localStorage.setItem(key, value);

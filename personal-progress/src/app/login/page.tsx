@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { getSupabaseClient } from "@/lib/supabase";
+import { authErrorMessage, isCloudQuotaError } from "@/lib/cloud-errors";
 
 type Mode = "login" | "register" | "reset";
 
@@ -23,6 +24,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [hasError, setHasError] = useState(false);
+  const [serviceRestricted, setServiceRestricted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const isSetupMissing = searchParams.get("setup") === "1";
 
@@ -62,6 +64,7 @@ function LoginForm() {
     setSubmitting(true);
     setMessage("");
     setHasError(false);
+    setServiceRestricted(false);
     const result = mode === "reset"
       ? await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/auth/callback?mode=recovery` })
       : mode === "register"
@@ -70,7 +73,8 @@ function LoginForm() {
     setSubmitting(false);
 
     if (result.error) {
-      setMessage(result.error.message);
+      setMessage(authErrorMessage(result.error));
+      setServiceRestricted(isCloudQuotaError(result.error));
       setHasError(true);
       return;
     }
@@ -114,13 +118,13 @@ function LoginForm() {
         <CardContent>
           <form onSubmit={submit}>
             <FieldGroup>
-              <Field data-invalid={hasError}>
+              <Field data-invalid={hasError && !serviceRestricted}>
                 <FieldLabel htmlFor="email">邮箱</FieldLabel>
-                <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" autoComplete="email" aria-invalid={hasError} disabled={submitting} />
+                <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" autoComplete="email" aria-invalid={hasError && !serviceRestricted} disabled={submitting} />
               </Field>
-              {mode !== "reset" ? <Field data-invalid={hasError}>
+              {mode !== "reset" ? <Field data-invalid={hasError && !serviceRestricted}>
                 <FieldLabel htmlFor="password">密码</FieldLabel>
-                <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 6 位" autoComplete={mode === "login" ? "current-password" : "new-password"} aria-invalid={hasError} disabled={submitting} />
+                <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 6 位" autoComplete={mode === "login" ? "current-password" : "new-password"} aria-invalid={hasError && !serviceRestricted} disabled={submitting} />
                 {mode === "register" ? <FieldDescription>使用至少 6 位的密码。</FieldDescription> : null}
               </Field> : null}
               {message ? hasError ? <FieldError>{message}</FieldError> : <FieldDescription>{message}</FieldDescription> : null}
