@@ -102,7 +102,7 @@ export function CloudRecordSync() {
         }
         setStatus(navigator.onLine ? "pending" : "offline");
         window.clearTimeout(timer);
-        timer = window.setTimeout(() => { void run(); }, 500);
+        timer = window.setTimeout(() => { void run(); }, 2_000);
       } catch {
         setStatus("error");
         setDetail("本机记录暂时无法读取或保存，请保留页面并重试。");
@@ -114,6 +114,10 @@ export function CloudRecordSync() {
     const offline = () => setStatus("offline");
     const visibilityChanged = () => {
       // A background transition is best effort; pending data is retried on return.
+      if (document.visibilityState === "hidden" && !timer) {
+        try { if (!synchronizer?.captureLocalChanges()) return; }
+        catch { /* Let run report a storage error without losing pending data. */ }
+      }
       void run();
     };
     let authObserved = false;

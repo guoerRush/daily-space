@@ -4,7 +4,7 @@ export function createRecordSyncFetch(supabaseUrl: string): typeof fetch {
     const request = new Request(input, init);
     const url = new URL(request.url);
     const supported = url.origin === new URL(supabaseUrl).origin
-      && url.pathname === "/rest/v1/user_records"
+      && ["/rest/v1/user_records", "/rest/v1/rpc/daily_space_read_changes", "/rest/v1/rpc/daily_space_write_changes"].includes(url.pathname)
       && ["GET", "POST", "PATCH"].includes(request.method);
     if (!supported || typeof window === "undefined") return fetch(request);
 
@@ -28,6 +28,7 @@ export function createRecordSyncFetch(supabaseUrl: string): typeof fetch {
     const headers = new Headers(retry.headers);
     headers.delete("apikey");
     const body = retry.method === "GET" ? undefined : await retry.text();
-    return fetch(`/api/record-sync${url.search}`, { method: retry.method, headers, body, signal: retry.signal });
+    const suffix = url.pathname.startsWith("/rest/v1/rpc/") ? `?rpc=${url.pathname.split("/").pop()}` : url.search;
+    return fetch(`/api/record-sync${suffix}`, { method: retry.method, headers, body, signal: retry.signal });
   };
 }

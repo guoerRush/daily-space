@@ -14,12 +14,16 @@ async function proxyRecords(request: Request) {
   }
 
   const query = new URL(request.url).searchParams;
+  const rpc = query.get("rpc");
+  if (rpc && (!["daily_space_read_changes", "daily_space_write_changes"].includes(rpc) || request.method !== "POST")) {
+    return Response.json({ code: "SYNC_BAD_RPC" }, { status: 400 });
+  }
   const isRead = request.method === "GET";
   const isUpdate = request.method === "PATCH";
   const user = query.get("user_id") ?? "";
   const version = query.get("updated_at") ?? "";
-  const upstream = new URL("/rest/v1/user_records", url);
-  upstream.searchParams.set("select", isRead && query.get("select") !== "updated_at" ? "records,updated_at" : "updated_at");
+  const upstream = new URL(rpc ? `/rest/v1/rpc/${rpc}` : "/rest/v1/user_records", url);
+  if (!rpc) upstream.searchParams.set("select", isRead && query.get("select") !== "updated_at" ? "records,updated_at" : "updated_at");
   if (isRead || isUpdate) {
     if (!accountFilter.test(user)) return Response.json({ code: "SYNC_BAD_FILTER" }, { status: 400 });
     upstream.searchParams.set("user_id", user);

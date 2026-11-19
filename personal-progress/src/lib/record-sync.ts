@@ -19,6 +19,8 @@ import {
 } from "@/lib/storage-contract";
 import { mergeRecoveredRecords } from "@/lib/record-backup";
 import { migrateFitnessHistory } from "@/lib/fitness-history";
+import { RecordSyncTransport, type DeltaCache } from "@/lib/record-sync-transport";
+import { splitSyncRecords } from "@/lib/record-sync-parts";
 
 const REMOTE_METADATA_KEY = "__daily_space_sync_metadata__";
 const SYNC_VERSION = 1;
@@ -37,6 +39,8 @@ type AccountSyncState = Record<string, unknown> & {
   metadata: SyncMetadata;
   lastRemoteRecords: StoredRecords;
   lastRemoteUpdatedAt?: string;
+  lastRemoteMetadata?: string;
+  deltaCache?: Pick<DeltaCache, "version" | "hashes">;
 };
 
 type UserRecordRow = {
@@ -92,6 +96,12 @@ function parseSyncState(value: Partial<AccountSyncState>): AccountSyncState {
         ? parseMetadata(JSON.stringify(value.metadata))
         : emptyMetadata(),
     lastRemoteRecords: sanitizeStoredRecords(value.lastRemoteRecords),
+    ...(typeof value.lastRemoteMetadata === "string" ? { lastRemoteMetadata: value.lastRemoteMetadata } : {}),
+    ...(value.deltaCache && typeof value.deltaCache === "object" && value.deltaCache.version === value.lastRemoteUpdatedAt
+      && value.deltaCache.hashes && typeof value.deltaCache.hashes === "object" ? {
+        deltaCache: { version: value.deltaCache.version, hashes: Object.fromEntries(Object.entries(value.deltaCache.hashes)
+          .filter((entry): entry is [string, string] => typeof entry[1] === "string" && /^[\da-f]{64}$/.test(entry[1]))) },
+      } : {}),
     ...(typeof value.lastRemoteUpdatedAt === "string" &&
     Number.isFinite(Date.parse(value.lastRemoteUpdatedAt))
       ? { lastRemoteUpdatedAt: value.lastRemoteUpdatedAt }
@@ -213,6 +223,7 @@ export class RecordSynchronizer {
   private running: Promise<void> | null = null;
   private collisions = 0;
   private remoteSnapshot: UserRecordRow | undefined;
+  private transport?: RecordSyncTransport;
 
   constructor(
     private readonly client: SupabaseClient,
@@ -300,24 +311,16 @@ export class RecordSynchronizer {
 
   private async syncOnce() {
     this.captureLocalChanges();
-    let data: UserRecordRow | null | undefined;
-    // Most polls have no remote edits. Do not download years of records and
-    // inline photos again just to discover that the row is unchanged.
-    if (this.remoteSnapshot?.updated_at) {
-      const { data: version, error } = await this.client.from("user_records")
-        .select("updated_at").eq("user_id", this.userId)
-        .maybeSingle<{ updated_at: string | null }>();
-      if (error) throw error;
-      if (!version) data = null;
-      else if (version.updated_at === this.remoteSnapshot.updated_at) data = this.remoteSnapshot;
+    const persisted = parseSyncState(readAccountSyncState<AccountSyncState>(this.storage, this.userId));
+    if (!this.transport) {
+      if (persisted.lastRemoteUpdatedAt && persisted.lastRemoteMetadata) {
+        this.remoteSnapshot = { updated_at: persisted.lastRemoteUpdatedAt,
+          records: { ...persisted.lastRemoteRecords, [REMOTE_METADATA_KEY]: persisted.lastRemoteMetadata } };
+      }
+      this.transport = new RecordSyncTransport(this.client, this.userId, persisted.deltaCache && this.remoteSnapshot
+        ? { ...persisted.deltaCache, parts: splitSyncRecords(this.remoteSnapshot.records as StoredRecords) } : undefined);
     }
-    if (data === undefined) {
-      const result = await this.client.from("user_records")
-        .select("records,updated_at").eq("user_id", this.userId)
-        .maybeSingle<UserRecordRow>();
-      if (result.error) throw result.error;
-      data = result.data;
-    }
+    const data = await this.transport.read(this.remoteSnapshot as { records: StoredRecords; updated_at: string | null } | undefined);
     if (!this.active) return;
 
     // Edits can arrive while the remote snapshot is being fetched.
@@ -412,24 +415,13 @@ export class RecordSynchronizer {
       savedAt = this.now().toISOString();
       // Compare-and-swap: two devices may read the same snapshot. The losing
       // writer must re-read and merge, never blindly overwrite the winner.
-      const row = { user_id: this.userId, records: recordsForRemote, updated_at: savedAt };
-      const table = this.client.from("user_records");
-      let write;
-      if (data) {
-        const update = table.update(row).eq("user_id", this.userId);
-        write = data.updated_at === null ? update.is("updated_at", null)
-          : update.eq("updated_at", data.updated_at);
-      } else {
-        write = table.insert(row);
-      }
-      const { data: saved, error: saveError } = await write.select("updated_at").maybeSingle<{ updated_at: string }>();
-      if ((!saveError && !saved) || saveError?.code === "23505") {
+      const saved = await this.transport.write(data, recordsForRemote, savedAt);
+      if (!saved) {
         this.remoteSnapshot = undefined;
         if (++this.collisions > 5) throw new Error("同步冲突，请稍后重试。");
         this.requested = true;
         return;
       }
-      if (saveError) throw saveError;
       if (!this.active) return;
       savedAt = validTimestamp(saved?.updated_at, savedAt);
     }
@@ -453,6 +445,8 @@ export class RecordSynchronizer {
       metadata: merged.metadata,
       lastRemoteRecords: merged.records,
       lastRemoteUpdatedAt: savedAt,
+      lastRemoteMetadata: recordsForRemote[REMOTE_METADATA_KEY],
+      ...(this.transport.cache ? { deltaCache: { version: this.transport.cache.version, hashes: this.transport.cache.hashes } } : {}),
     } satisfies AccountSyncState);
     if (editedDuringUpload) {
       this.captureLocalChanges();

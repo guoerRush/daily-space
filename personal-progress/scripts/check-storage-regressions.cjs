@@ -323,6 +323,10 @@ async function syncTransport() {
   assert.equal(calls[1].auth, "Bearer user-token");
   assert.equal(calls[1].key, null);
   assert.ok(calls[1].url.includes("/api/record-sync?user_id=eq.owner&updated_at=eq.version"));
+  calls.length = 0;
+  await send(url + "/rest/v1/rpc/daily_space_write_changes", {method:"POST", headers:{authorization:"Bearer user-token"}, body:JSON.stringify({p_expected:null,p_changes:{"__journal_date__:2026-11-19":"one date"}})});
+  assert.ok(calls[1].url.endsWith("/api/record-sync?rpc=daily_space_write_changes"));
+  assert.equal(calls[1].body, calls[0].body);
   calls.length = 0; directFails = false; status = 402;
   assert.equal((await send(url + "/rest/v1/user_records")).status, 402);
   assert.equal(calls.length, 1, "Quota restrictions must not be retried through the proxy");
@@ -343,13 +347,17 @@ async function syncTransport() {
   assert.equal((await routes.GET(req("?user_id=not.eq.owner"))).status, 400);
   assert.equal((await routes.PATCH(req("?user_id=" + owner, "PATCH"))).status, 400);
   assert.equal(upstream.length, 0);
+  assert.equal((await routes.POST(req("?rpc=arbitrary_admin_function", "POST"))).status, 400);
   const res = await routes.GET(req("?user_id=" + owner + "&select=updated_at"));
   assert.equal(res.headers.get("cache-control"), "private, no-store");
   assert.equal(new URL(upstream[0].url).searchParams.get("select"), "updated_at");
   assert.equal(upstream[0].init.headers.get("authorization"), "Bearer owner-token");
   assert.equal(upstream[0].init.headers.get("apikey"), "anon");
   assert.equal((await routes.PATCH(req("?user_id=" + owner + "&updated_at=eq.2026-11-18T00%3A00%3A00%2B00%3A00", "PATCH"))).status, 200);
+  assert.equal((await routes.POST(req("?rpc=daily_space_read_changes", "POST"))).status, 200);
+  assert.equal(new URL(upstream[2].url).pathname, "/rest/v1/rpc/daily_space_read_changes");
   console.log("PASS sync proxy: authentication, owner and version filters, minimal version responses, no shared cache");
 }
 
-(async () => { planStorageQuota(); await fitness(); await photos(); await deviceSync(); await syncTransport(); })().catch((error) => { console.error(error); process.exitCode = 1; });
+module.exports = { loader, MemoryStorage, cloudClient };
+if (require.main === module) (async () => { planStorageQuota(); await fitness(); await photos(); await deviceSync(); await syncTransport(); })().catch((error) => { console.error(error); process.exitCode = 1; });
