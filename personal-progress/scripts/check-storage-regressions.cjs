@@ -325,10 +325,15 @@ async function syncTransport() {
   assert.ok(calls[1].url.includes("/api/record-sync?user_id=eq.owner&updated_at=eq.version"));
   calls.length = 0;
   await send(url + "/rest/v1/rpc/daily_space_write_changes", {method:"POST", headers:{authorization:"Bearer user-token"}, body:JSON.stringify({p_expected:null,p_changes:{"__journal_date__:2026-11-19":"one date"}})});
-  assert.ok(calls[1].url.endsWith("/api/record-sync?rpc=daily_space_write_changes"));
-  assert.equal(calls[1].body, calls[0].body);
+  assert.equal(calls.length, 1, "Do not stall the phone on a known unreachable route for every write");
+  assert.ok(calls[0].url.endsWith("/api/record-sync?rpc=daily_space_write_changes"));
+  assert.ok(JSON.parse(calls[0].body).p_changes["__journal_date__:2026-11-19"]);
+  calls.length = 0;
+  await send(url + "/auth/v1/token?grant_type=refresh_token", {method:"POST", body:JSON.stringify({refresh_token:"rotating-test-token"})});
+  assert.deepEqual(calls.map(call => call.url), ["https://site.test/api/session-refresh"]);
+  assert.equal(JSON.parse(calls[0].body).refresh_token, "rotating-test-token");
   calls.length = 0; directFails = false; status = 402;
-  assert.equal((await send(url + "/rest/v1/user_records")).status, 402);
+  assert.equal((await createRecordSyncFetch(url)(url + "/rest/v1/user_records")).status, 402);
   assert.equal(calls.length, 1, "Quota restrictions must not be retried through the proxy");
   const errors = loader()("@/lib/cloud-errors");
   assert.equal(errors.isCloudQuotaError({ message: "Service for this project is restricted due to exceed_egress_quota" }), true);
@@ -357,6 +362,24 @@ async function syncTransport() {
   assert.equal((await routes.POST(req("?rpc=daily_space_read_changes", "POST"))).status, 200);
   assert.equal(new URL(upstream[2].url).pathname, "/rest/v1/rpc/daily_space_read_changes");
   console.log("PASS sync proxy: authentication, owner and version filters, minimal version responses, no shared cache");
+
+  let authStatus = 200;
+  const refresh = loader({}, { process: {env:{ NEXT_PUBLIC_SUPABASE_URL:url, NEXT_PUBLIC_SUPABASE_ANON_KEY:"anon" }}, fetch: async (input, init) => {
+    assert.equal(String(input), url + "/auth/v1/token?grant_type=refresh_token");
+    assert.deepEqual(JSON.parse(init.body), { refresh_token:"test-token" });
+    return Response.json({message:"test"}, {status:authStatus});
+  } })("@/app/api/session-refresh/route");
+  const attempt = (body, origin="https://site.test") => refresh.POST(new Request("https://site.test/api/session-refresh", {
+    method:"POST", headers:{origin}, body:JSON.stringify(body),
+  }));
+  assert.equal((await attempt({})).status, 400);
+  assert.equal((await attempt({refresh_token:"test-token"}, "https://other.test")).status, 403);
+  assert.equal((await attempt({refresh_token:"test-token"})).headers.get("cache-control"), "private, no-store");
+  authStatus = 402;
+  assert.equal((await attempt({refresh_token:"test-token"})).status, 503);
+  authStatus = 400;
+  assert.equal((await attempt({refresh_token:"test-token"})).status, 400);
+  console.log("PASS mobile session renewal: one request, fixed upstream, no caching, temporary and invalid tokens handled separately");
 }
 
 module.exports = { loader, MemoryStorage, cloudClient };

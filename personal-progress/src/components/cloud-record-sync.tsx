@@ -7,7 +7,7 @@ import { deactivateAccountStorage } from "@/lib/account-storage";
 import { RecordSynchronizer } from "@/lib/record-sync";
 import { dispatchStorageChanges, subscribeToStorageChanges } from "@/lib/storage-contract";
 import { getSupabaseClient } from "@/lib/supabase";
-import { CLOUD_QUOTA_MESSAGE, isCloudQuotaError } from "@/lib/cloud-errors";
+import { isCloudQuotaError, syncErrorDetail } from "@/lib/cloud-errors";
 
 type Status = "pending" | "syncing" | "synced" | "error" | "offline";
 
@@ -57,11 +57,8 @@ export function CloudRecordSync() {
         if (!active || currentGeneration !== generation) return;
         console.error("Daily Space cloud sync failed.", error);
         setStatus(navigator.onLine ? "error" : "offline");
-        const code = error && typeof error === "object" && "code" in error ? error.code : "";
         if (isCloudQuotaError(error)) restrictedUntil = Date.now() + 15 * 60_000;
-        setDetail(isCloudQuotaError(error) ? CLOUD_QUOTA_MESSAGE + " 请保留本机记录，服务恢复后会继续同步。" : code === "42501" || code === "PGRST301"
-          ? "登录授权已失效，请重新登录同一账号。"
-          : "尚未完成云端同步，将自动重试；请保持页面打开。也可点击立即重试。");
+        setDetail(syncErrorDetail(error));
         retryTimer = window.setTimeout(() => { void run(); }, Math.max(retryDelay, restrictedUntil - Date.now()));
         retryDelay = Math.min(retryDelay * 2, 30_000);
       } finally {
@@ -71,7 +68,6 @@ export function CloudRecordSync() {
         }
       }
     };
-    retry.current = () => { restrictedUntil = 0; void run(); };
     const sessionChanged = (session: { user: { id: string; email?: string } } | null) => {
       if (!active) return;
       setEmail(session?.user.email ?? "");
@@ -120,13 +116,28 @@ export function CloudRecordSync() {
       }
       void run();
     };
-    let authObserved = false;
-    void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!authObserved) sessionChanged(session);
-    }).catch(() => { if (active) setStatus("error"); });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      authObserved = true;
-      sessionChanged(session);
+    const restoreSession = async () => {
+      const started = generation;
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (!active || generation !== started) return;
+        if (error) throw error;
+        if (!session) throw Object.assign(new Error("Missing session"), { code: "PGRST301" });
+        sessionChanged(session);
+      } catch (error) {
+        if (!active || generation !== started) return;
+        setStatus("error");
+        setDetail(syncErrorDetail(error));
+      }
+    };
+    retry.current = () => {
+      restrictedUntil = 0;
+      if (synchronizer) void run();
+      else void restoreSession();
+    };
+    void restoreSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session || event === "SIGNED_OUT") sessionChanged(session);
     });
     const unsubscribeChanges = subscribeToStorageChanges(schedule, window);
     const remoteRefresh = window.setInterval(refreshRemote, 60_000);

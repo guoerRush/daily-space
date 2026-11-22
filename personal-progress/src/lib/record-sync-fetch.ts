@@ -1,8 +1,17 @@
-/** Retry only account record requests when a browser cannot reach Supabase. */
+/** Use the site's connection while the browser's direct record route is down. */
 export function createRecordSyncFetch(supabaseUrl: string): typeof fetch {
+  let preferProxyUntil = 0;
   return async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
+    if (typeof window !== "undefined" && url.origin === new URL(supabaseUrl).origin
+      && request.method === "POST" && url.pathname === "/auth/v1/token"
+      && url.searchParams.get("grant_type") === "refresh_token") {
+      return fetch("/api/session-refresh", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: await request.text(), cache: "no-store", credentials: "omit", signal: request.signal,
+      });
+    }
     const supported = url.origin === new URL(supabaseUrl).origin
       && ["/rest/v1/user_records", "/rest/v1/rpc/daily_space_read_changes", "/rest/v1/rpc/daily_space_write_changes"].includes(url.pathname)
       && ["GET", "POST", "PATCH"].includes(request.method);
@@ -11,6 +20,23 @@ export function createRecordSyncFetch(supabaseUrl: string): typeof fetch {
     // Clone the request before fetch consumes its body. A retried write is
     // guarded by the original expected row timestamp or unique account key.
     const retry = request.clone();
+    const throughSite = async () => {
+      const headers = new Headers(retry.headers);
+      headers.delete("apikey");
+      const body = retry.method === "GET" ? undefined : await retry.text();
+      const suffix = url.pathname.startsWith("/rest/v1/rpc/") ? `?rpc=${url.pathname.split("/").pop()}` : url.search;
+      return fetch(`/api/record-sync${suffix}`, { method: retry.method, headers, body, signal: retry.signal });
+    };
+    if (Date.now() < preferProxyUntil) {
+      try {
+        const response = await throughSite();
+        if (!response.ok) preferProxyUntil = 0;
+        return response;
+      } catch (error) {
+        preferProxyUntil = 0;
+        throw error;
+      }
+    }
     const direct = new AbortController();
     const abort = () => direct.abort(request.signal.reason);
     request.signal.addEventListener("abort", abort, { once: true });
@@ -25,10 +51,8 @@ export function createRecordSyncFetch(supabaseUrl: string): typeof fetch {
       window.clearTimeout(timeout);
       request.signal.removeEventListener("abort", abort);
     }
-    const headers = new Headers(retry.headers);
-    headers.delete("apikey");
-    const body = retry.method === "GET" ? undefined : await retry.text();
-    const suffix = url.pathname.startsWith("/rest/v1/rpc/") ? `?rpc=${url.pathname.split("/").pop()}` : url.search;
-    return fetch(`/api/record-sync${suffix}`, { method: retry.method, headers, body, signal: retry.signal });
+    const response = await throughSite();
+    if (response.ok) preferProxyUntil = Date.now() + 10 * 60_000;
+    return response;
   };
 }
