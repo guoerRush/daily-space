@@ -120,7 +120,7 @@ function planStorageQuota() {
 
 async function fitness() {
   const storage = new MemoryStorage();
-  const window = new EventTarget();
+  const window = Object.assign(new EventTarget(), { localStorage: storage });
   const load = loader({}, { localStorage: storage, window });
   const { readFitnessHistory, saveFitnessHistory } = load("@/lib/fitness-history");
   const { RecordSynchronizer } = load("@/lib/record-sync");

@@ -1,3 +1,4 @@
+import { browserRecords } from "@/lib/browser-records";
 import type { JournalEntry } from "@/lib/journals";
 import { listJournals } from "@/lib/journals";
 import type { StoredDayPlan } from "@/lib/plans";
@@ -415,7 +416,7 @@ export function generateWeeklyReview(weekStart: string): WeeklyReview {
 export function listWeeklyReviews(): WeeklyReview[] {
   if (typeof window === "undefined") return [];
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.weeklyReviews) ?? "[]") as WeeklyReview[];
+    const parsed = JSON.parse(browserRecords.getItem(STORAGE_KEYS.weeklyReviews) ?? "[]") as WeeklyReview[];
     return Array.isArray(parsed) ? parsed.filter((item) => item?.weekStart && item?.weekEnd).sort((a, b) => b.weekStart.localeCompare(a.weekStart)) : [];
   } catch {
     return [];
@@ -432,7 +433,7 @@ export function saveWeeklyReview(review: WeeklyReview) {
     saved,
     ...listWeeklyReviews().filter((item) => item.weekStart !== review.weekStart),
   ];
-  window.localStorage.setItem(STORAGE_KEYS.weeklyReviews, JSON.stringify(next));
+  browserRecords.setItem(STORAGE_KEYS.weeklyReviews, JSON.stringify(next));
   window.dispatchEvent(new Event(STORAGE_EVENTS.weeklyReviewsChanged));
   return saved;
 }

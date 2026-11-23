@@ -1,5 +1,6 @@
 "use client";
 
+import { browserRecords } from "@/lib/browser-records";
 import { useEffect, useMemo, useState } from "react";
 import { Activity, CalendarDays, CloudUpload, HeartPulse, Moon, RefreshCw, Save, ShieldCheck, Sparkles, Footprints, Flame } from "lucide-react";
 import { AppFrame } from "@/components/app-frame";
@@ -104,7 +105,7 @@ export default function StatusPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
-        const stored = window.localStorage.getItem(STORAGE_KEY);
+        const stored = browserRecords.getItem(STORAGE_KEY);
         const loaded = stored ? readRecords(JSON.parse(stored)) : [];
         setRecords(loaded.sort((left, right) => right.date.localeCompare(left.date)));
         const today = loaded.find((record) => record.date === todayKey());
@@ -122,7 +123,7 @@ export default function StatusPage() {
   function saveRecord() {
     const next = { ...draft, updatedAt: new Date().toISOString(), source: draft.source || "手动记录" };
     const nextRecords = [next, ...records.filter((record) => record.date !== next.date)].sort((left, right) => right.date.localeCompare(left.date));
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextRecords));
+    browserRecords.setItem(STORAGE_KEY, JSON.stringify(nextRecords));
     setRecords(nextRecords);
     setDraft(next);
     setMessage(`已保存 ${next.date} 的状态数据。`);
@@ -135,7 +136,7 @@ export default function StatusPage() {
       try {
         const imported = readRecords(JSON.parse(String(reader.result)));
         const merged = [...imported, ...records].reduce<WellnessRecord[]>((all, record) => all.some((item) => item.date === record.date) ? all : [...all, record], []).sort((left, right) => right.date.localeCompare(left.date));
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        browserRecords.setItem(STORAGE_KEY, JSON.stringify(merged));
         setRecords(merged);
         setDraft(merged.find((record) => record.date === todayKey()) ?? emptyRecord());
         setMessage(`已导入 ${imported.length} 条状态记录。`);
@@ -152,7 +153,7 @@ export default function StatusPage() {
     try {
       const imported = await parseAppleHealthFile(file);
       const merged = [...imported, ...records].reduce<WellnessRecord[]>((all, record) => all.some((item) => item.date === record.date) ? all : [...all, record], []).sort((left, right) => right.date.localeCompare(left.date));
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      browserRecords.setItem(STORAGE_KEY, JSON.stringify(merged));
       setRecords(merged);
       setDraft(merged.find((record) => record.date === todayKey()) ?? emptyRecord());
       setMessage(`已导入 Apple 健康 ${imported.length} 天数据。`);

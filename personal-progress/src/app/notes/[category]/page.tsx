@@ -237,10 +237,10 @@ function NotesEditor({ category }: { category: NoteCategory }) {
     }
     if (target === "goal") {
       const goals = JSON.parse(
-        window.localStorage.getItem("daily-space:goals") ?? "[]",
+        browserRecords.getItem("daily-space:goals") ?? "[]",
       ) as Array<Record<string, unknown>>;
       const now = new Date().toISOString();
-      window.localStorage.setItem(
+      browserRecords.setItem(
         "daily-space:goals",
         JSON.stringify([
           ...goals,

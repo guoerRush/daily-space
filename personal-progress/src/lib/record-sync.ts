@@ -1,4 +1,4 @@
-import { browserRecords, flushBrowserRecords } from "@/lib/browser-records";
+import { browserRecords, flushBrowserRecords, initializeBrowserRecords } from "@/lib/browser-records";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   activateAccountStorage,
@@ -235,9 +235,12 @@ export class RecordSynchronizer {
   ) {}
 
   async start() {
+    if (this.storage === browserRecords && window.indexedDB) await initializeBrowserRecords();
+    if (!this.active) return;
     const previousVisibleRecords = collectStoredRecords(this.storage);
     activateAccountStorage(this.storage, this.userId);
-    migrateFitnessHistory(this.storage);
+    await migrateFitnessHistory(this.storage);
+    if (!this.active) return;
     if (
       !storedRecordsEqual(
         previousVisibleRecords,
@@ -452,10 +455,10 @@ export class RecordSynchronizer {
       this.captureLocalChanges();
       this.requested = true;
     }
-    // The cloud write has already succeeded. A stalled or expired Safari
-    // storage connection must not hide that result or block the next upload.
-    if (this.storage === browserRecords) void flushBrowserRecords().catch(() => {});
     if (this.active && visibleChanged) this.notify();
+    // Upload first so running low on disk cannot strand edits on this phone.
+    // A downloaded record is safe to reopen only after its transaction commits.
+    if (this.storage === browserRecords) await flushBrowserRecords();
   }
 
 }

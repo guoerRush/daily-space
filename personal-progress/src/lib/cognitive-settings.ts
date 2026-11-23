@@ -1,3 +1,4 @@
+import { browserRecords } from "@/lib/browser-records";
 export type CognitiveSettings = {
   nightlyNoteCleanup: boolean;
   weeklyGrowthSummary: boolean;
@@ -14,7 +15,7 @@ export function getCognitiveSettings(): CognitiveSettings {
     return {
       ...defaults,
       ...(JSON.parse(
-        window.localStorage.getItem(STORAGE_KEYS.cognitiveSettings) ?? "{}",
+        browserRecords.getItem(STORAGE_KEYS.cognitiveSettings) ?? "{}",
       ) as Partial<CognitiveSettings>),
     };
   } catch {
@@ -23,7 +24,7 @@ export function getCognitiveSettings(): CognitiveSettings {
 }
 
 export function saveCognitiveSettings(settings: CognitiveSettings) {
-  window.localStorage.setItem(
+  browserRecords.setItem(
     STORAGE_KEYS.cognitiveSettings,
     JSON.stringify(settings),
   );

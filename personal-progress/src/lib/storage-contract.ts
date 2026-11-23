@@ -1,5 +1,10 @@
 export type StoredRecords = Record<string, string>;
 
+export function isLocalStorageQuotaError(error: unknown) {
+  return !!error && typeof error === "object" &&
+    (("name" in error && error.name === "QuotaExceededError") || ("code" in error && error.code === 22));
+}
+
 export type StorageAdapter = Pick<
   Storage,
   "getItem" | "setItem" | "removeItem" | "key" | "length"

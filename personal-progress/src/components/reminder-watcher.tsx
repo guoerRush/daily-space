@@ -1,5 +1,6 @@
 "use client";
 
+import { browserRecords } from "@/lib/browser-records";
 import { useEffect } from "react";
 import { getFeishuReminders, getReminderSettings, saveReminderSettings, type FeishuReminder } from "@/lib/reminder";
 
@@ -21,10 +22,10 @@ function beijingNow() {
 
 function sessionKey(date: string, reminderId: string) { return `daily-space:feishu-reminder-session:${date}:${reminderId}`; }
 function readSession(date: string, reminderId: string): ReminderSession {
-  try { return { acknowledged: false, ...(JSON.parse(window.localStorage.getItem(sessionKey(date, reminderId)) ?? "{}") as Partial<ReminderSession>) }; }
+  try { return { acknowledged: false, ...(JSON.parse(browserRecords.getItem(sessionKey(date, reminderId)) ?? "{}") as Partial<ReminderSession>) }; }
   catch { return { acknowledged: false }; }
 }
-function writeSession(date: string, reminderId: string, session: ReminderSession) { window.localStorage.setItem(sessionKey(date, reminderId), JSON.stringify(session)); }
+function writeSession(date: string, reminderId: string, session: ReminderSession) { browserRecords.setItem(sessionKey(date, reminderId), JSON.stringify(session)); }
 function isPageActive() { return document.visibilityState === "visible" && document.hasFocus(); }
 
 export function ReminderWatcher() {

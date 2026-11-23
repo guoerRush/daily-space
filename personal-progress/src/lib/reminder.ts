@@ -1,3 +1,4 @@
+import { browserRecords } from "@/lib/browser-records";
 export type ReminderSettings = {
   enabled: boolean;
   time: string;
@@ -31,7 +32,7 @@ export function getReminderSettings(): ReminderSettings {
     return {
       ...defaultReminderSettings,
       ...(JSON.parse(
-        window.localStorage.getItem(REMINDER_STORAGE_KEY) ?? "{}",
+        browserRecords.getItem(REMINDER_STORAGE_KEY) ?? "{}",
       ) as Partial<ReminderSettings>),
     };
   } catch {
@@ -47,7 +48,7 @@ export function saveReminderSettings(settings: ReminderSettings) {
     createdAt: settings.createdAt ?? existing.createdAt ?? now,
     updatedAt: now,
   };
-  window.localStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify(next));
+  browserRecords.setItem(REMINDER_STORAGE_KEY, JSON.stringify(next));
   window.dispatchEvent(new Event(STORAGE_EVENTS.reminderChanged));
   return next;
 }
@@ -57,7 +58,7 @@ export function getFeishuReminders(): FeishuReminder[] {
   try {
     return (
       JSON.parse(
-        window.localStorage.getItem(STORAGE_KEYS.feishuReminders) ?? "[]",
+        browserRecords.getItem(STORAGE_KEYS.feishuReminders) ?? "[]",
       ) as FeishuReminder[]
     )
       .filter((item) => /^\d{2}:\d{2}$/.test(item.time))
@@ -93,7 +94,7 @@ export function saveFeishuReminders(reminders: FeishuReminder[]) {
       updatedAt: changed ? now : item.updatedAt ?? existing?.updatedAt ?? createdAt,
     };
   });
-  window.localStorage.setItem(
+  browserRecords.setItem(
     STORAGE_KEYS.feishuReminders,
     JSON.stringify(stamped),
   );

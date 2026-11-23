@@ -1,3 +1,4 @@
+import { browserRecords } from "@/lib/browser-records";
 export type NoteCategory = string;
 export type NoteTag = "灵感" | "疑问" | "情绪波动" | "待办" | "其他";
 export type NoteCategoryInfo = {
@@ -41,7 +42,7 @@ export function listNoteCategories(): NoteCategoryInfo[] {
   if (typeof window === "undefined") return builtInCategories;
   try {
     const custom = JSON.parse(
-      window.localStorage.getItem(STORAGE_KEYS.noteCategories) ?? "[]",
+      browserRecords.getItem(STORAGE_KEYS.noteCategories) ?? "[]",
     ) as NoteCategoryInfo[];
     const uniqueCustom = custom.filter(
       (category) => category.id && category.label && !categoryInfo[category.id],
@@ -72,7 +73,7 @@ export function saveNoteCategory(input: {
     description: input.description?.trim() || "收集值得保留的信息",
   };
   const custom = listNoteCategories().filter((item) => !categoryInfo[item.id]);
-  window.localStorage.setItem(
+  browserRecords.setItem(
     STORAGE_KEYS.noteCategories,
     JSON.stringify([...custom, category]),
   );
@@ -84,7 +85,7 @@ export function listNotes(category?: NoteCategory): Note[] {
   if (typeof window === "undefined") return [];
   try {
     const notes = JSON.parse(
-      window.localStorage.getItem(STORAGE_KEYS.notes) ?? "[]",
+      browserRecords.getItem(STORAGE_KEYS.notes) ?? "[]",
     ) as Note[];
     return notes
       .map((note) => {
@@ -119,7 +120,7 @@ export function saveNote(
     createdAt: note.createdAt ?? existing?.createdAt ?? new Date(id).toISOString(),
     updatedAt: now,
   };
-  window.localStorage.setItem(
+  browserRecords.setItem(
     STORAGE_KEYS.notes,
     JSON.stringify([next, ...current]),
   );
@@ -128,7 +129,7 @@ export function saveNote(
 }
 
 export function deleteNote(id: number) {
-  window.localStorage.setItem(
+  browserRecords.setItem(
     STORAGE_KEYS.notes,
     JSON.stringify(listNotes().filter((note) => note.id !== id)),
   );

@@ -1,3 +1,4 @@
+import { browserRecords } from "@/lib/browser-records";
 export type SpecialDay = {
   id: number;
   title: string;
@@ -35,7 +36,7 @@ export function listSpecialDayTypes(): SpecialDayType[] {
   if (!canUseStorage()) return defaultSpecialDayTypes;
   try {
     const stored = JSON.parse(
-      window.localStorage.getItem(STORAGE_KEYS.specialDayTypes) ?? "[]",
+      browserRecords.getItem(STORAGE_KEYS.specialDayTypes) ?? "[]",
     ) as SpecialDayType[];
     const custom = stored.filter(
       (item) =>
@@ -67,7 +68,7 @@ export function addSpecialDayType(label: string): SpecialDayType | null {
   const stored = types.filter(
     (item) => !defaultSpecialDayTypes.some((defaultType) => defaultType.id === item.id),
   );
-  window.localStorage.setItem(
+  browserRecords.setItem(
     STORAGE_KEYS.specialDayTypes,
     JSON.stringify([...stored, custom]),
   );
@@ -98,7 +99,7 @@ export function listSpecialDays(): SpecialDay[] {
   try {
     return (
       JSON.parse(
-        window.localStorage.getItem(STORAGE_KEYS.specialDays) ?? "[]",
+        browserRecords.getItem(STORAGE_KEYS.specialDays) ?? "[]",
       ) as SpecialDay[]
     ).sort((a, b) => a.date.localeCompare(b.date));
   } catch {
@@ -110,7 +111,7 @@ export function saveSpecialDay(day: Omit<SpecialDay, "id">) {
   const id = Date.now();
   const now = new Date().toISOString();
   const next = { ...day, id, createdAt: day.createdAt ?? now, updatedAt: now };
-  window.localStorage.setItem(
+  browserRecords.setItem(
     STORAGE_KEYS.specialDays,
     JSON.stringify([...listSpecialDays(), next]),
   );
@@ -119,7 +120,7 @@ export function saveSpecialDay(day: Omit<SpecialDay, "id">) {
 }
 
 export function deleteSpecialDay(id: number) {
-  window.localStorage.setItem(
+  browserRecords.setItem(
     STORAGE_KEYS.specialDays,
     JSON.stringify(listSpecialDays().filter((day) => day.id !== id)),
   );
@@ -134,7 +135,7 @@ export function updateSpecialDay(updatedDay: SpecialDay) {
     createdAt: updatedDay.createdAt ?? existing?.createdAt ?? new Date(updatedDay.id).toISOString(),
     updatedAt: now,
   };
-  window.localStorage.setItem(
+  browserRecords.setItem(
     STORAGE_KEYS.specialDays,
     JSON.stringify(
       listSpecialDays().map((day) =>

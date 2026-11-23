@@ -1,3 +1,4 @@
+import { browserRecords } from "@/lib/browser-records";
 import { todayKey } from "@/lib/journals";
 import { STORAGE_EVENTS, STORAGE_KEYS } from "@/lib/storage-contract";
 
@@ -17,7 +18,7 @@ const starterHabits: Habit[] = [
 export function listHabits(): Habit[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEYS.habits);
+    const raw = browserRecords.getItem(STORAGE_KEYS.habits);
     if (!raw) return starterHabits;
     return JSON.parse(raw) as Habit[];
   } catch {
@@ -26,7 +27,7 @@ export function listHabits(): Habit[] {
 }
 
 function writeHabits(habits: Habit[]) {
-  window.localStorage.setItem(STORAGE_KEYS.habits, JSON.stringify(habits));
+  browserRecords.setItem(STORAGE_KEYS.habits, JSON.stringify(habits));
   window.dispatchEvent(new Event(STORAGE_EVENTS.habitsChanged));
 }
 

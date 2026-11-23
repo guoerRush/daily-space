@@ -1,5 +1,6 @@
 import {
   collectStoredRecords,
+  isLocalStorageQuotaError,
   replaceStoredRecords,
   sanitizeStoredRecords,
   type StorageAdapter,
@@ -24,22 +25,12 @@ export function clearAccountCaches(storage: StorageAdapter, userId: string) {
   }
 }
 
-function isQuotaError(error: unknown) {
-  return Boolean(
-    error &&
-      typeof error === "object" &&
-      "name" in error &&
-      (error.name === "QuotaExceededError" ||
-        ("code" in error && error.code === 22)),
-  );
-}
-
 function setAccountItem(storage: StorageAdapter, key: string, value: string) {
   try {
     storage.setItem(key, value);
     memoryCaches.get(storage)?.delete(key);
   } catch (error) {
-    if (!isQuotaError(error)) throw error;
+    if (!isLocalStorageQuotaError(error)) throw error;
     cacheInMemory(storage, key, value);
   }
 }
@@ -66,7 +57,7 @@ export function setItemWithAccountCacheRetry(
   try {
     storage.setItem(key, value);
   } catch (error) {
-    if (!isQuotaError(error)) throw error;
+    if (!isLocalStorageQuotaError(error)) throw error;
     const userId = getActiveStorageUser(storage);
     if (!userId) throw error;
 

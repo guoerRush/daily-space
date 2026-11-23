@@ -1,5 +1,6 @@
 "use client";
 
+import { browserRecords } from "@/lib/browser-records";
 import { uploadPhoto } from "@/lib/photo-upload";
 import Image from "next/image";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
@@ -101,7 +102,7 @@ function loadGoals() {
   try {
     const stored = (
       (JSON.parse(
-        window.localStorage.getItem("daily-space:goals") ?? "null",
+        browserRecords.getItem("daily-space:goals") ?? "null",
       ) as Goal[] | null) ?? defaultGoals
     );
     return stored.map((goal) => {
@@ -216,7 +217,7 @@ function GoalsWorkspace() {
       visitTasks(goal.tasks ?? []);
     }
     setGoals(stamped);
-    window.localStorage.setItem("daily-space:goals", JSON.stringify(stamped));
+    browserRecords.setItem("daily-space:goals", JSON.stringify(stamped));
     window.dispatchEvent(new Event("daily-space:goals-changed"));
   };
   const addGoal = () => {

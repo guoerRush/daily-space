@@ -1,3 +1,4 @@
+import { browserRecords } from "@/lib/browser-records";
 export type SuccessJournal = {
   date: string;
   content: string;
@@ -64,7 +65,7 @@ export function listSuccessJournals(): SuccessJournal[] {
   if (typeof window === "undefined") return [];
   try {
     const raw =
-      window.localStorage.getItem(STORAGE_KEYS.successJournals) ?? "[]";
+      browserRecords.getItem(STORAGE_KEYS.successJournals) ?? "[]";
     if (raw === cachedRaw) return cachedEntries;
     cachedRaw = raw;
     cachedEntries = (JSON.parse(raw) as SuccessJournal[]).sort((a, b) =>
@@ -128,7 +129,7 @@ export function saveSuccessJournal(entry: Omit<SuccessJournal, "updatedAt">) {
     },
     ...current,
   ];
-  window.localStorage.setItem(
+  browserRecords.setItem(
     STORAGE_KEYS.successJournals,
     JSON.stringify(next),
   );
@@ -138,7 +139,7 @@ export function saveSuccessJournal(entry: Omit<SuccessJournal, "updatedAt">) {
 
 export function deleteSuccessJournal(date: string) {
   const next = listSuccessJournals().filter((entry) => entry.date !== date);
-  window.localStorage.setItem(
+  browserRecords.setItem(
     STORAGE_KEYS.successJournals,
     JSON.stringify(next),
   );
@@ -180,7 +181,7 @@ export function mergeSuccessJournalLines(imports: SuccessJournalLineImport[]) {
   const next = [...byDate.values()].sort((left, right) =>
     right.date.localeCompare(left.date),
   );
-  window.localStorage.setItem(STORAGE_KEYS.successJournals, JSON.stringify(next));
+  browserRecords.setItem(STORAGE_KEYS.successJournals, JSON.stringify(next));
   cachedRaw = null;
   window.dispatchEvent(new Event(STORAGE_EVENTS.successJournalsChanged));
   return { changed: true, importedLines, normalizedEntries };

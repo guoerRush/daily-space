@@ -1,3 +1,5 @@
+import { isLocalStorageQuotaError } from "@/lib/storage-contract";
+
 export function isCloudQuotaError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const value = error as { message?: string; code?: string; status?: number };
@@ -8,8 +10,8 @@ export const CLOUD_QUOTA_MESSAGE = "云服务流量额度已用尽，登录和�
 
 export function syncErrorDetail(error: unknown) {
   if (isCloudQuotaError(error)) return CLOUD_QUOTA_MESSAGE;
-  const { code, name, message } = (error ?? {}) as { code?: string; name?: string; message?: string };
-  if (name === "QuotaExceededError") return "手机本地存储空间不足，无法完成本次同步。请保留本网站数据。";
+  const { code, message } = (error ?? {}) as { code?: string; message?: string };
+  if (isLocalStorageQuotaError(error)) return "浏览器暂时无法写入本机记录。请先导出本机备份，保留网站数据，再释放一些设备空间并点重试。";
   if (code === "PGRST301" || code === "PGRST303" || /jwt expired|refresh.token.*invalid/i.test(message ?? "")) {
     return "登录凭证已失效，请重新登录同一账号后同步。";
   }

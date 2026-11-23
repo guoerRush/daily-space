@@ -1,5 +1,6 @@
 "use client";
 
+import { browserRecords } from "@/lib/browser-records";
 import {
   useEffect,
   useRef,
@@ -77,7 +78,7 @@ function clampPosition(
 function readStoredPosition(): PetPosition | null {
   try {
     const stored = JSON.parse(
-      window.localStorage.getItem(POSITION_STORAGE_KEY) ?? "null",
+      browserRecords.getItem(POSITION_STORAGE_KEY) ?? "null",
     ) as Partial<PetPosition> | null;
     if (
       stored &&
@@ -94,7 +95,7 @@ function readStoredPosition(): PetPosition | null {
 
 function savePosition(position: PetPosition) {
   try {
-    window.localStorage.setItem(
+    browserRecords.setItem(
       POSITION_STORAGE_KEY,
       JSON.stringify(position),
     );

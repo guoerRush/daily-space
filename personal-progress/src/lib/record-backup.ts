@@ -107,6 +107,16 @@ export function serializeDataBackup(backup: DataBackup) {
   return JSON.stringify(backup, null, 2);
 }
 
+export function downloadDataBackup(backup: DataBackup) {
+  const file = new Blob([serializeDataBackup(backup)], { type: "application/json" });
+  const href = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = `日常留白备份-${backup.exportedAt.slice(0, 10)}.json`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(href), 30_000);
+}
+
 export function parseDataBackup(input: string | unknown): DataBackup {
   if (typeof input === "string" && input.length > MAX_BACKUP_BYTES) {
     throw new Error("The backup file is too large.");

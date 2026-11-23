@@ -5,9 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { CloudCheck, CloudOff, RefreshCw } from "lucide-react";
 import { deactivateAccountStorage } from "@/lib/account-storage";
 import { RecordSynchronizer } from "@/lib/record-sync";
-import { dispatchStorageChanges, subscribeToStorageChanges } from "@/lib/storage-contract";
+import { dispatchStorageChanges, isLocalStorageQuotaError, subscribeToStorageChanges } from "@/lib/storage-contract";
 import { getSupabaseClient } from "@/lib/supabase";
 import { isCloudQuotaError, syncErrorDetail } from "@/lib/cloud-errors";
+import { createDataBackup, downloadDataBackup } from "@/lib/record-backup";
 
 type Status = "pending" | "syncing" | "synced" | "error" | "offline";
 
@@ -15,6 +16,7 @@ export function CloudRecordSync() {
   const [status, setStatus] = useState<Status>("pending");
   const [detail, setDetail] = useState("");
   const [email, setEmail] = useState("");
+  const [offerBackup, setOfferBackup] = useState(false);
   const retry = useRef<() => void>(() => {});
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -50,6 +52,7 @@ export function CloudRecordSync() {
         else await next.sync();
         if (!active || currentGeneration !== generation) return;
         ready = true;
+        setOfferBackup(false);
         retryDelay = 2_000;
         setStatus(before === changed ? "synced" : "pending");
         setDetail(`最近同步：${new Date().toLocaleTimeString("zh-CN")}`);
@@ -58,6 +61,7 @@ export function CloudRecordSync() {
         console.error("Daily Space cloud sync failed.", error);
         setStatus(navigator.onLine ? "error" : "offline");
         if (isCloudQuotaError(error)) restrictedUntil = Date.now() + 15 * 60_000;
+        if (isLocalStorageQuotaError(error)) setOfferBackup(true);
         setDetail(syncErrorDetail(error));
         retryTimer = window.setTimeout(() => { void run(); }, Math.max(retryDelay, restrictedUntil - Date.now()));
         retryDelay = Math.min(retryDelay * 2, 30_000);
@@ -73,6 +77,7 @@ export function CloudRecordSync() {
       setEmail(session?.user.email ?? "");
       if (session && synchronizer?.userId === session.user.id) return;
       generation += 1;
+      setOfferBackup(false);
       restrictedUntil = 0;
       synchronizer?.dispose();
       clearRetry();
@@ -99,9 +104,10 @@ export function CloudRecordSync() {
         setStatus(navigator.onLine ? "pending" : "offline");
         window.clearTimeout(timer);
         timer = window.setTimeout(() => { void run(); }, 2_000);
-      } catch {
+      } catch (error) {
         setStatus("error");
-        setDetail("本机记录暂时无法读取或保存，请保留页面并重试。");
+        setDetail(syncErrorDetail(error));
+        if (isLocalStorageQuotaError(error)) setOfferBackup(true);
       }
     };
     const refreshRemote = () => {
@@ -173,6 +179,7 @@ export function CloudRecordSync() {
         <Icon size={13} className={status === "syncing" ? "animate-spin" : ""} /><span role="status">{label}</span>
       </button>
       {failed && detail ? <span className="w-full text-right text-muted-foreground">{detail}</span> : null}
+      {offerBackup && <button type="button" className="text-primary underline" onClick={() => downloadDataBackup(createDataBackup())}>导出本机备份</button>}
     </div>
   </div>;
 }

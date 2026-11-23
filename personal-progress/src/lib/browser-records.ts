@@ -1,4 +1,4 @@
-import { STORAGE_KEYS, type StorageAdapter } from "@/lib/storage-contract";
+import { isLocalStorageQuotaError, isManagedStorageKey, type StorageAdapter } from "@/lib/storage-contract";
 
 // Keep the existing record keys so account sync and backups use the same data.
 const overflow = new Map<string, string | null>();
@@ -6,6 +6,7 @@ const pending = new Map<string, string | null>();
 let database: IDBDatabase | undefined;
 let opening: Promise<void> | undefined;
 let writing: Promise<void> | undefined;
+let hydrated = false;
 
 function closeDatabase(db: IDBDatabase) {
   if (database === db) {
@@ -45,6 +46,7 @@ export function initializeBrowserRecords() {
         } else {
           window.clearTimeout(timer);
           database = db;
+          hydrated = true;
           resolve();
         }
       };
@@ -103,15 +105,6 @@ export async function flushBrowserRecords(): Promise<void> {
   }
 }
 
-function canOverflow(key: string) {
-  return key === STORAGE_KEYS.journals ||
-    key === STORAGE_KEYS.completionHistory ||
-    key.startsWith("daily-space:fitness-reflection:") ||
-    key.startsWith("__daily_space_internal__:v1:") ||
-    key.startsWith(STORAGE_KEYS.planPrefix) ||
-    key.startsWith(STORAGE_KEYS.weeklyPrioritiesPrefix);
-}
-
 function queue(key: string, value: string | null) {
   overflow.set(key, value);
   pending.set(key, value);
@@ -149,7 +142,8 @@ export const browserRecords: StorageAdapter = {
         window.localStorage.setItem(key, value);
         return;
       } catch (error) {
-        if (!database || !canOverflow(key) || !(error instanceof DOMException) || error.name !== "QuotaExceededError") throw error;
+        if (!hydrated || !(isManagedStorageKey(key) || key.startsWith("__daily_space_internal__:v1:"))
+          || !isLocalStorageQuotaError(error)) throw error;
       }
     }
     queue(key, value);

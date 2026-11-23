@@ -26,7 +26,7 @@ import { collectAllRecordsForExport } from "@/lib/cloud-backups";
 import {
   createDataBackup,
   restoreDataBackup,
-  serializeDataBackup,
+  downloadDataBackup,
 } from "@/lib/record-backup";
 import { parsePendingLocalImport } from "@/lib/local-backup";
 import {
@@ -143,16 +143,7 @@ function SettingsWorkspace() {
       setItem() {},
       removeItem() {},
     });
-    const blob = new Blob(
-      [serializeDataBackup(backup)],
-      { type: "application/json" },
-    );
-    const href = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = href;
-    link.download = `日常留白备份-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(href);
+    downloadDataBackup(backup);
     setExported(
       `已导出全部 ${Object.keys(exportedRecords.records).length} 项记录（${exportedRecords.source === "cloud-and-browser" ? "云端与本机合并" : "本机数据"}）。`,
     );

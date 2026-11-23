@@ -2,7 +2,7 @@
 
 import { FITNESS_DRAFT_KEY, readFitnessHistory, saveFitnessHistory, type WeightHistory } from "@/lib/fitness-history";
 import { readFitnessReflections, saveFitnessReflection, type FitnessReflection } from "@/lib/fitness-reflections";
-import { flushBrowserRecords } from "@/lib/browser-records";
+import { browserRecords, flushBrowserRecords } from "@/lib/browser-records";
 import { STORAGE_EVENTS } from "@/lib/storage-contract";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
@@ -44,6 +44,7 @@ export function FitnessModule({ initialDate }: { initialDate: string }) {
   const [savedDate, setSavedDate] = useState("");
   const saved = savedDate === today;
   const dirty = useRef(false);
+  const weightRevision = useRef(0);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -54,7 +55,7 @@ export function FitnessModule({ initialDate }: { initialDate: string }) {
         const savedReflections = readFitnessReflections();
         setReflections(savedReflections);
         if (!reflectionDirty.current) setReflectionText(savedReflections.find((item) => item.date === today)?.text ?? "");
-        if (!dirty.current) setWeights(history[0]?.values ?? JSON.parse(localStorage.getItem(FITNESS_DRAFT_KEY) || "{}"));
+        if (!dirty.current) setWeights(history[0]?.values ?? JSON.parse(browserRecords.getItem(FITNESS_DRAFT_KEY) || "{}"));
       }
       catch { setError("历史读取失败，请刷新重试。"); }
     };
@@ -89,19 +90,24 @@ export function FitnessModule({ initialDate }: { initialDate: string }) {
   }
 
   function updateWeight(key: string, value: string) {
+    weightRevision.current += 1;
     dirty.current = true;
     setWeights((current) => ({ ...current, [key]: value }));
     setSavedDate("");
   }
 
-  function saveWeights() {
+  async function saveWeights() {
     const values = Object.fromEntries(Object.entries(weights).filter(([, value]) => value.trim()));
     if (!Object.keys(values).length) return;
+    const revision = weightRevision.current;
     try {
       saveFitnessHistory({ date: today, values });
+      await flushBrowserRecords();
       setWeightHistory(readFitnessHistory());
-      dirty.current = false;
-      setSavedDate(today);
+      if (revision === weightRevision.current) {
+        dirty.current = false;
+        setSavedDate(today);
+      }
       setError("");
     } catch { setSavedDate(""); setError("保存失败，请检查浏览器可用空间后重试。"); }
   }
