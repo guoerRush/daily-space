@@ -156,8 +156,24 @@ export function countdown(day: SpecialDay, now = new Date()) {
   );
   if (day.repeatsYearly) {
     target = new Date(today.getFullYear(), source.getMonth(), source.getDate());
-    if (target < today) target.setFullYear(target.getFullYear() + 1);
+    if (target < today) target = new Date(today.getFullYear() + 1, source.getMonth(), source.getDate());
   }
   return Math.round((target.getTime() - today.getTime()) / 86_400_000);
+}
+
+export function nearestBirthdays(days: SpecialDay[], today: string) {
+  const now = new Date(`${today}T12:00:00`);
+  let remaining = Infinity;
+  const birthdays: SpecialDay[] = [];
+  for (const day of days) {
+    if (day.category !== "birthday" && day.type !== "birthday") continue;
+    // Past birth dates recur annually. A future entry starts on its recorded date.
+    const distance = countdown({ ...day, repeatsYearly: day.date < today }, now);
+    if (!Number.isFinite(distance) || distance < 0 || distance > remaining) continue;
+    if (distance < remaining) birthdays.length = 0;
+    remaining = distance;
+    birthdays.push(day);
+  }
+  return { remaining, birthdays };
 }
 import { STORAGE_EVENTS, STORAGE_KEYS } from "@/lib/storage-contract";

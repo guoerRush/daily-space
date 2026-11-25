@@ -15,7 +15,7 @@ export function HomeTodayDate({ initialDate }: { initialDate: string }) {
       <p className="text-sm font-semibold text-primary">
         {formatJournalDate(today)}
       </p>
-      <TodayEventLabel />
+      <TodayEventLabel today={today} />
     </div>
   );
 }
